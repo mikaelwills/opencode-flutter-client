@@ -40,3 +40,21 @@ class IntentionalDisconnect extends ConnectionEvent {
   List<Object> get props => [reason ?? ''];
 }
 
+class NetworkSignalLost extends ConnectionEvent {
+  final String? reason;
+
+  const NetworkSignalLost({this.reason});
+
+  @override
+  List<Object> get props => [reason ?? ''];
+}
+
+class NetworkRestored extends ConnectionEvent {
+  final String? networkType;
+
+  const NetworkRestored({this.networkType});
+
+  @override
+  List<Object> get props => [networkType ?? ''];
+}
+

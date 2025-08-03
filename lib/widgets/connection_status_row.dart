@@ -7,6 +7,7 @@ import '../blocs/connection/connection_bloc.dart';
 import '../blocs/connection/connection_state.dart' as connection_states;
 import '../blocs/config/config_cubit.dart';
 import '../blocs/config/config_state.dart';
+import '../services/network_service.dart';
 
 class ConnectionStatusRow extends StatefulWidget {
   const ConnectionStatusRow({super.key});
@@ -58,13 +59,25 @@ class _ConnectionStatusRowState extends State<ConnectionStatusRow>
               ipText = configState.serverIp;
             }
 
+            // Get network status for enhanced display
+            final networkService = NetworkService();
+            final networkStatus = networkService.currentStatus;
+            final networkIcon = networkStatus?.icon ?? '';
+            
             String statusText;
             if (connectionState is connection_states.ConnectedWithSession) {
-              statusText = 'Connected to $ipText';
+              statusText = '${networkIcon} Connected to $ipText';
             } else if (connectionState is connection_states.Reconnecting) {
-              statusText = 'Reconnecting to $ipText...';
+              statusText = '${networkIcon} Reconnecting to $ipText...';
+            } else if (connectionState is connection_states.Disconnected) {
+              final isIntentional = connectionState.isIntentional;
+              if (isIntentional) {
+                statusText = '${networkIcon} Manually disconnected';
+              } else {
+                statusText = '${networkIcon} Disconnected from $ipText';
+              }
             } else {
-              statusText = 'Disconnected from $ipText';
+              statusText = '${networkIcon} Disconnected from $ipText';
             }
             return Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),

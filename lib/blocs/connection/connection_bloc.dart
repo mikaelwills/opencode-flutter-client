@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../services/opencode_client.dart';
+import '../../services/network_service.dart';
 import '../session/session_bloc.dart';
 import '../session/session_event.dart' as session_events;
 import '../session/session_state.dart' as session_states;
@@ -12,13 +13,23 @@ import 'connection_state.dart';
 class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionState> {
   final OpenCodeClient openCodeClient;
   final SessionBloc sessionBloc;
+  final NetworkService _networkService = NetworkService();
   Timer? _reconnectTimer;
   Timer? _pingTimer;
   int _reconnectAttempt = 0;
   StreamSubscription? _sessionSubscription;
+  StreamSubscription? _networkSubscription;
   DateTime _lastActivity = DateTime.now();
+  Emitter<ConnectionState>? _currentEmitter;
+  bool _isFastReconnectMode = false;
+  int _fastReconnectAttempt = 0;
   static const Duration _activePingInterval = Duration(seconds: 30);
   static const Duration _idlePingInterval = Duration(minutes: 2);
+  static const List<Duration> _fastReconnectDelays = [
+    Duration(milliseconds: 500),  // 0.5s
+    Duration(seconds: 1),         // 1s  
+    Duration(seconds: 2),         // 2s
+  ];
 
   ConnectionBloc({
     required this.openCodeClient,
@@ -30,13 +41,40 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionState> {
     on<StartReconnection>(_onStartReconnection);
     on<ResetConnection>(_onResetConnection);
     on<IntentionalDisconnect>(_onIntentionalDisconnect);
+    on<NetworkSignalLost>(_onNetworkSignalLost);
+    on<NetworkRestored>(_onNetworkRestored);
     
+
+    // Initialize network monitoring
+    _initializeNetworkMonitoring();
 
     // Start initial connection check
     add(CheckConnection());
 
     // Set up periodic ping when connected
     _startPeriodicPing();
+  }
+
+  Future<void> _initializeNetworkMonitoring() async {
+    // Initialize the network service
+    await _networkService.initialize();
+    
+    // Listen for network status changes
+    _networkSubscription = _networkService.networkStatusStream.listen((networkStatus) {
+      print('📶 [ConnectionBloc] Network status changed: ${networkStatus.displayName}');
+      
+      if (!networkStatus.isConnected) {
+        // Immediate signal loss detection
+        print('📶 [ConnectionBloc] Network lost - triggering immediate signal loss');
+        add(NetworkSignalLost(reason: 'Network signal lost (${networkStatus.displayName})'));
+      } else {
+        // Network restored - trigger fast reconnection if we're currently disconnected
+        if (state is Disconnected || state is Reconnecting) {
+          print('📶 [ConnectionBloc] Network restored - triggering fast reconnection');
+          add(NetworkRestored(networkType: networkStatus.displayName));
+        }
+      }
+    });
   }
 
   void _startPeriodicPing() {
@@ -71,12 +109,17 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionState> {
     CheckConnection event,
     Emitter<ConnectionState> emit,
   ) async {
+    _currentEmitter = emit;
     _markActivity(); // Mark activity for adaptive ping
     
     try {
-      // Add timeout to ping operation
+      // Use shorter timeout for fast reconnect mode
+      final timeout = _isFastReconnectMode 
+          ? const Duration(seconds: 3)
+          : const Duration(seconds: 10);
+      
       final isReachable = await openCodeClient.ping()
-          .timeout(const Duration(seconds: 10));
+          .timeout(timeout);
       
       if (isReachable) {
         if (state is! ConnectedWithSession) {
@@ -89,8 +132,11 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionState> {
         _handleConnectionLost('Server unreachable', emit);
       }
     } on TimeoutException {
-      print('❌ [Connection] Ping timeout');
-      _handleConnectionLost('Connection timeout', emit);
+      final timeoutMsg = _isFastReconnectMode 
+          ? 'Fast reconnect timeout' 
+          : 'Connection timeout';
+      print('❌ [Connection] Ping timeout: $timeoutMsg');
+      _handleConnectionLost(timeoutMsg, emit);
     } catch (e) {
       print('❌ [Connection] Ping failed: $e');
       _handleConnectionLost(e.toString(), emit);
@@ -105,6 +151,7 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionState> {
   }
 
   Future<void> _handleConnectionEstablished(Emitter<ConnectionState> emit) async {
+    _currentEmitter = emit;
     try {
       // Fetch config to get provider and model information with timeout
       print('🔍 [Connection] Fetching server config...');
@@ -114,6 +161,8 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionState> {
           '✅ [Connection] Config fetched successfully - Provider: ${openCodeClient.providerID}, Model: ${openCodeClient.modelID}');
 
       _reconnectAttempt = 0;
+      _isFastReconnectMode = false; // Disable fast reconnect mode on successful connection
+      _fastReconnectAttempt = 0;
       _cancelReconnectTimer();
 
       // Connection is established - let SessionBloc handle session creation
@@ -160,14 +209,41 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionState> {
     _handleConnectionLost(event.reason, emit);
   }
 
-  void _handleConnectionLost(String? reason, Emitter<ConnectionState> emit) {
+  void _handleConnectionLost(String? reason, Emitter<ConnectionState>? emit) {
+    final emitter = emit ?? _currentEmitter;
+    if (emitter == null) return;
     _sessionSubscription?.cancel();
     _pingTimer?.cancel();
-    emit(Disconnected(reason: reason, isIntentional: false));
+    emitter(Disconnected(reason: reason, isIntentional: false));
     
-    // Start reconnection with improved strategy
-    _reconnectAttempt++;
-    add(StartReconnection(attempt: _reconnectAttempt));
+    // Choose reconnection strategy based on mode
+    if (_isFastReconnectMode && _fastReconnectAttempt < _fastReconnectDelays.length) {
+      // Fast reconnect mode - use rapid retry pattern
+      _startFastReconnection();
+    } else {
+      // Normal reconnection with exponential backoff
+      if (_isFastReconnectMode) {
+        // Fast reconnect attempts exhausted, switch to normal mode
+        _isFastReconnectMode = false;
+        _fastReconnectAttempt = 0;
+        _reconnectAttempt = 1; // Start at attempt 1 for normal reconnection
+      } else {
+        _reconnectAttempt++;
+      }
+      add(StartReconnection(attempt: _reconnectAttempt));
+    }
+  }
+
+  void _startFastReconnection() {
+    final delay = _fastReconnectDelays[_fastReconnectAttempt];
+    _fastReconnectAttempt++;
+    
+    print('🔍 [Connection] Fast reconnect attempt $_fastReconnectAttempt in ${delay.inMilliseconds}ms');
+    
+    _reconnectTimer = Timer(delay, () {
+      print('🔍 [Connection] Fast reconnect timer fired, checking connection');
+      add(CheckConnection());
+    });
   }
 
   void _onStartReconnection(
@@ -231,6 +307,38 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionState> {
     ));
   }
 
+  void _onNetworkSignalLost(
+    NetworkSignalLost event,
+    Emitter<ConnectionState> emit,
+  ) {
+    print('📶 [Connection] Network signal lost: ${event.reason ?? 'Signal lost'}');
+    
+    // Disable fast reconnect mode when signal is lost
+    _isFastReconnectMode = false;
+    _fastReconnectAttempt = 0;
+    
+    // Use the existing connection lost handler but with network-specific reason
+    _handleConnectionLost(event.reason ?? 'Network signal lost', emit);
+  }
+
+  void _onNetworkRestored(
+    NetworkRestored event,
+    Emitter<ConnectionState> emit,
+  ) {
+    print('📶 [Connection] Network restored: ${event.networkType ?? 'Unknown network'}');
+    
+    // Enable fast reconnect mode for immediate network restoration
+    _isFastReconnectMode = true;
+    _fastReconnectAttempt = 0;
+    _reconnectAttempt = 0; // Reset normal reconnect attempts
+    
+    // Cancel any existing reconnect timer
+    _cancelReconnectTimer();
+    
+    // Start immediate fast reconnection
+    add(CheckConnection());
+  }
+
   
 
   @override
@@ -238,6 +346,8 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionState> {
     _reconnectTimer?.cancel();
     _pingTimer?.cancel();
     _sessionSubscription?.cancel();
+    _networkSubscription?.cancel();
+    _networkService.dispose();
     return super.close();
   }
 }

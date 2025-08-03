@@ -40,7 +40,7 @@ dependencies:
   provider: ^6.1.1 # MultiProvider for dependency injection
   flutter_highlight: ^0.7.0 # Syntax highlighting for code
   flutter_markdown: ^0.6.18 # Markdown rendering (server-provided)
-  connectivity_plus: ^5.0.0 # Network connectivity monitoring
+  connectivity_plus: ^6.1.0 # Network connectivity monitoring
   equatable: ^2.0.5 # Value equality for BLoC states
   shared_preferences: ^2.2.2 # Persistent storage for settings
   dartssh2: ^2.9.0 # SSH client for server management
