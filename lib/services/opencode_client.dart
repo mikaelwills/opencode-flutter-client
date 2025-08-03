@@ -293,6 +293,190 @@ class OpenCodeClient {
     }
   }
 
+  Future<void> deleteSession(String sessionId) async {
+    print('🔍 [OpenCodeClient] Deleting session $sessionId');
+
+    try {
+      final uri = Uri.parse('${OpenCodeConfig.baseUrl}/session/$sessionId');
+
+      print('🔍 [OpenCodeClient] Making DELETE request to: $uri');
+
+      final response = await _client.delete(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      print('🔍 [OpenCodeClient] Delete session response:');
+      print('   Status Code: ${response.statusCode}');
+
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        print('🔍 [OpenCodeClient] Successfully deleted session $sessionId');
+      } else {
+        print('❌ [OpenCodeClient] Failed to delete session: ${response.statusCode}');
+        throw Exception('Failed to delete session: ${response.statusCode}');
+      }
+    } catch (e, stackTrace) {
+      print('❌ [OpenCodeClient] Delete session failed with error: $e');
+      print('❌ [OpenCodeClient] Stack trace: $stackTrace');
+      rethrow;
+    }
+  }
+
+  Future<String> generateSessionSummary(String sessionId) async {
+    try {
+      final uri = Uri.parse('${OpenCodeConfig.baseUrl}/session/$sessionId/summarize');
+
+      final requestBody = json.encode({
+        'providerID': _providerID,
+        'modelID': _modelID,
+      });
+
+      final response = await _client.post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: requestBody,
+      );
+
+      if (response.statusCode == 200) {
+        try {
+          final responseData = json.decode(response.body);
+          
+          // The server returns 'true' to indicate summary was initiated via SSE
+          // Since we can't easily capture the SSE stream here, use a fallback
+          if (responseData == true || 
+              (responseData is Map && responseData.containsKey('success'))) {
+            return 'Session ${sessionId.substring(0, 8)}...';
+          }
+          
+          // Try different possible response formats
+          String summary;
+          if (responseData is String) {
+            summary = responseData;
+          } else if (responseData is Map) {
+            summary = responseData['summary'] ?? 
+                     responseData['description'] ?? 
+                     responseData['text'] ?? 
+                     responseData['content'] ?? 
+                     responseData['message'] ?? 
+                     'No summary available';
+          } else {
+            // Don't convert boolean true to string "true"
+            summary = 'Session ${sessionId.substring(0, 8)}...';
+          }
+          
+          return summary;
+        } catch (e) {
+          print('❌ [OpenCodeClient] Failed to parse summary response: $e');
+          return 'Session ${sessionId.substring(0, 8)}...';
+        }
+      } else {
+        // Only log errors, not the common cases
+        if (response.statusCode == 404) {
+          return 'Session ${sessionId.substring(0, 8)}...';
+        } else if (response.statusCode == 405) {
+          return await _tryGetSummary(sessionId);
+        } else if (response.statusCode == 400) {
+          return await _tryAlternativeSummaryFormats(sessionId);
+        }
+        
+        print('❌ [OpenCodeClient] Failed to generate summary: ${response.statusCode} - ${response.body}');
+        throw Exception('Failed to generate summary: ${response.statusCode} - ${response.body}');
+      }
+    } catch (e, stackTrace) {
+      print('❌ [OpenCodeClient] Generate summary failed with error: $e');
+      rethrow;
+    }
+  }
+
+  Future<String> _tryGetSummary(String sessionId) async {
+    try {
+      final uri = Uri.parse('${OpenCodeConfig.baseUrl}/session/$sessionId/summary');
+      final response = await _client.get(uri, headers: {'Accept': 'application/json'});
+      
+      if (response.statusCode == 200) {
+        final responseData = json.decode(response.body);
+        return responseData['summary'] ?? responseData.toString();
+      }
+    } catch (e) {
+      // Silent failure, fallback to default
+    }
+    
+    return 'Session ${sessionId.substring(0, 8)}...';
+  }
+
+  Future<String> _tryAlternativeSummaryFormats(String sessionId) async {
+    // Try different request body formats
+    final alternatives = [
+      {
+        'providerID': _providerID,
+        'modelID': _modelID,
+        'sessionId': sessionId,
+      },
+      {
+        'providerID': _providerID,
+        'modelID': _modelID,
+        'session_id': sessionId,
+      },
+      {
+        'providerID': _providerID,
+        'modelID': _modelID,
+      },
+    ];
+
+    for (final body in alternatives) {
+      try {
+        final uri = Uri.parse('${OpenCodeConfig.baseUrl}/session/$sessionId/summarize');
+        final response = await _client.post(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+          body: body != null ? json.encode(body) : null,
+        );
+
+        if (response.statusCode == 200) {
+          final responseData = json.decode(response.body);
+          return responseData['summary'] ?? responseData.toString();
+        }
+      } catch (e) {
+        // Silent failure, try next alternative
+        continue;
+      }
+    }
+    
+    return 'Session ${sessionId.substring(0, 8)}...';
+  }
+
+  Future<List<OpenCodeMessage>> getSessionMessages(String sessionId, {int limit = 100}) async {
+    print('🔍 [OpenCodeClient] Getting messages for session $sessionId');
+
+    try {
+      final uri = Uri.parse('${OpenCodeConfig.baseUrl}/session/$sessionId/message?limit=$limit');
+
+      print('🔍 [OpenCodeClient] Making GET request to: $uri');
+
+      final response = await _client.get(
+        uri,
+        headers: {'Accept': 'application/json'},
+      );
+
+      print('🔍 [OpenCodeClient] Get messages response: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(response.body);
+        final messages = data.map((json) => OpenCodeMessage.fromApiResponse(json)).toList();
+        
+        print('🔍 [OpenCodeClient] Successfully loaded ${messages.length} messages');
+        return messages;
+      } else {
+        print('❌ [OpenCodeClient] Failed to load messages: ${response.statusCode}');
+        throw Exception('Failed to load messages: ${response.statusCode}');
+      }
+    } catch (e, stackTrace) {
+      print('❌ [OpenCodeClient] Get messages failed with error: $e');
+      print('❌ [OpenCodeClient] Stack trace: $stackTrace');
+      rethrow;
+    }
+  }
+
   void dispose() {
     print('🔍 [OpenCodeClient] Disposing HTTP client');
     _client.close();

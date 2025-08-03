@@ -7,6 +7,10 @@ import '../blocs/config/config_cubit.dart';
 import '../blocs/config/config_state.dart';
 import '../blocs/connection/connection_bloc.dart';
 import '../blocs/connection/connection_event.dart';
+import '../blocs/session_list/session_list_bloc.dart';
+import '../blocs/session_list/session_list_event.dart';
+import '../blocs/chat/chat_bloc.dart';
+import '../blocs/chat/chat_state.dart';
 import 'package:dartssh2/dartssh2.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -148,6 +152,79 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to clear IP: $e'),
+            backgroundColor: OpenCodeTheme.error,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteAllSessions() async {
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: OpenCodeTheme.surface,
+        title: const Text(
+          'Delete All Sessions',
+          style: TextStyle(color: OpenCodeTheme.text),
+        ),
+        content: const Text(
+          'This will permanently delete all sessions and cannot be undone. Are you sure?',
+          style: TextStyle(color: OpenCodeTheme.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: OpenCodeTheme.textSecondary),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text(
+              'Delete All',
+              style: TextStyle(color: OpenCodeTheme.error),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      // Get current session ID from ChatBloc to exclude it from deletion
+      final chatState = context.read<ChatBloc>().state;
+      String? currentSessionId;
+      
+      if (chatState is ChatReady) {
+        currentSessionId = chatState.sessionId;
+      } else if (chatState is ChatSendingMessage) {
+        currentSessionId = chatState.sessionId;
+      }
+      
+      // Trigger delete all sessions event with exclusion
+      final sessionListBloc = context.read<SessionListBloc>();
+      sessionListBloc.add(DeleteAllSessions(excludeSessionId: currentSessionId));
+      
+      if (mounted) {
+        final message = currentSessionId != null
+            ? 'Deleting all sessions except the active one...'
+            : 'Deleting all sessions...';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: OpenCodeTheme.warning,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to delete all sessions: $e'),
             backgroundColor: OpenCodeTheme.error,
           ),
         );
@@ -413,6 +490,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
 
                 const Spacer(),
+                // Delete All Sessions button
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton(
+                    onPressed: _deleteAllSessions,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF1A1A1A),
+                      foregroundColor: OpenCodeTheme.error,
+                      elevation: 0,
+                      side: const BorderSide(
+                        color: Color(0xFF333333),
+                        width: 1,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                    ),
+                    child: const Text('Delete All Sessions'),
+                  ),
+                ),
+                const SizedBox(height: 16),
                 SizedBox(
                   width: double.infinity,
                   height: 48,

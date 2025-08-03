@@ -33,6 +33,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<SSEEventReceived>(_onSSEEventReceived);
     on<SSEErrorOccurred>(_onSSEErrorOccurred);
     on<ClearMessages>(_onClearMessages);
+    on<ClearChat>(_onClearChat);
     on<AddUserMessage>(_onAddUserMessage);
   }
 
@@ -260,6 +261,23 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (_currentSessionId != null) {
       emit(_createChatReadyState());
     }
+  }
+
+  void _onClearChat(
+    ClearChat event,
+    Emitter<ChatState> emit,
+  ) {
+    // Clear all chat state and prepare for new session
+    _messages.clear();
+    _messageIndex.clear();
+    _currentSessionId = null;
+    
+    // Cancel any existing event subscription
+    _eventSubscription?.cancel();
+    _eventSubscription = null;
+    
+    // Emit initial state
+    emit(ChatInitial());
   }
 
   void _onAddUserMessage(

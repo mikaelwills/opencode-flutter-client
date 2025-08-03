@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../screens/connect_screen.dart';
 import '../screens/chat_screen.dart';
+import '../screens/sessions_screen.dart';
 import '../screens/settings_screen.dart';
 import '../widgets/main_scaffold.dart';
 
@@ -25,6 +26,14 @@ final GoRouter appRouter = GoRouter(
           pageBuilder: (context, state) => _buildFadeTransitionPage(
             key: state.pageKey,
             child: const ChatScreen(),
+          ),
+        ),
+        GoRoute(
+          path: '/sessions',
+          name: 'sessions',
+          pageBuilder: (context, state) => _buildFadeTransitionPage(
+            key: state.pageKey,
+            child: const SessionsScreen(),
           ),
         ),
         GoRoute(

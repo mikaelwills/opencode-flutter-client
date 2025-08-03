@@ -59,6 +59,8 @@ class SSEErrorOccurred extends ChatEvent {
 
 class ClearMessages extends ChatEvent {}
 
+class ClearChat extends ChatEvent {}
+
 class AddUserMessage extends ChatEvent {
   final String sessionId;
   final String content;

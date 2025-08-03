@@ -21,13 +21,23 @@ class NavBar extends StatelessWidget {
           if (currentLocation == '/settings') ...[
             GestureDetector(
                 onTap: () => context.go("/chat"),
-                child: const Icon(Icons.arrow_left)),
+                child: Icon(Icons.arrow_left, color: OpenCodeTheme.text)),
           ],
-          if (currentLocation == '/chat') ...[const Text("OpenCode Mobile")],
-                   if (currentLocation == '/chat') ...[
+          if (currentLocation == '/sessions') ...[
+            GestureDetector(
+                onTap: () => context.go("/chat"),
+                child: Icon(Icons.arrow_left, color: OpenCodeTheme.text)),
+          ],
+          if (currentLocation == '/chat') ...[
+            GestureDetector(
+              onTap: () => context.go("/sessions"),
+              child: Icon(Icons.list, color: OpenCodeTheme.text),
+            ),
+          ],
+          if (currentLocation == '/chat' || currentLocation == '/sessions') ...[
             GestureDetector(
                 onTap: () => context.go("/settings"),
-                child: const Icon(Icons.settings)),
+                child: Icon(Icons.settings, color: OpenCodeTheme.text)),
           ],
         ],
       ),
