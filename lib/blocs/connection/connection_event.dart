@@ -31,3 +31,12 @@ class StartReconnection extends ConnectionEvent {
 
 class ResetConnection extends ConnectionEvent {}
 
+class IntentionalDisconnect extends ConnectionEvent {
+  final String? reason;
+
+  const IntentionalDisconnect({this.reason});
+
+  @override
+  List<Object> get props => [reason ?? ''];
+}
+

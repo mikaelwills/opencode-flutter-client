@@ -121,9 +121,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       // Reset ConnectionBloc state
       if (mounted) {
-        context
-            .read<ConnectionBloc>()
-            .add(const ConnectionLost(reason: 'IP cleared by user'));
+        context.read<ConnectionBloc>().add(const IntentionalDisconnect());
       }
 
       // Reset via ConfigCubit (this handles SharedPreferences automatically)

@@ -9,7 +9,6 @@ abstract class ConnectionState extends Equatable {
 
 class ConnectionInitial extends ConnectionState {}
 
-
 class ConnectedWithSession extends ConnectionState {
   final String sessionId;
 
@@ -21,11 +20,12 @@ class ConnectedWithSession extends ConnectionState {
 
 class Disconnected extends ConnectionState {
   final String? reason;
+  final bool isIntentional;
 
-  const Disconnected({this.reason});
+  const Disconnected({this.reason, this.isIntentional = false});
 
   @override
-  List<Object> get props => [reason ?? ''];
+  List<Object> get props => [reason ?? '', isIntentional];
 }
 
 class Reconnecting extends ConnectionState {
