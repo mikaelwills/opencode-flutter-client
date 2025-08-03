@@ -1,0 +1,301 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import '../config/opencode_config.dart';
+import '../models/session.dart';
+import '../models/opencode_message.dart';
+
+class OpenCodeClient {
+  final http.Client _client = http.Client();
+  String? _providerID;
+  String? _modelID;
+
+  String? get providerID => _providerID;
+  String? get modelID => _modelID;
+  String get modelDisplayName {
+    if (_modelID == null || _providerID == null) {
+      return 'Unknown Model';
+    }
+    
+    // Format provider name (e.g., "anthropic" -> "Anthropic")
+    String formattedProvider = _providerID!.split('-').map((word) => 
+        word.isEmpty ? '' : word[0].toUpperCase() + word.substring(1).toLowerCase()
+    ).join(' ');
+    
+    // Format model name (e.g., "claude-3-5-sonnet-20241022" -> "Claude Sonnet 4")
+    String formattedModel = _formatModelName(_modelID!);
+    
+    return '$formattedProvider $formattedModel';
+  }
+  
+  String _formatModelName(String modelId) {
+    // Remove date patterns (numbers with 8+ digits)
+    String cleaned = modelId.replaceAll(RegExp(r'-?\d{8,}'), '');
+    
+    // Handle specific model patterns
+    if (cleaned.contains('claude')) {
+      // Extract version numbers and model type
+      final parts = cleaned.split('-');
+      String result = 'Claude';
+      
+      // Look for version numbers and model type
+      for (int i = 0; i < parts.length; i++) {
+        final part = parts[i];
+        if (part == 'claude') continue;
+        
+        // Handle version numbers (3, 5, etc.)
+        if (RegExp(r'^\d+$').hasMatch(part)) {
+          // Skip adding version numbers for now, we'll handle them specially
+          continue;
+        }
+        
+        // Handle model types
+        if (part == 'sonnet' || part == 'haiku' || part == 'opus') {
+          result += ' ${part[0].toUpperCase()}${part.substring(1)}';
+        }
+      }
+      
+      // Add version number at the end (extract the highest single digit)
+      final versionMatch = RegExp(r'-(\d+)-').firstMatch(modelId);
+      if (versionMatch != null) {
+        final version = versionMatch.group(1);
+        if (version != null && version.length == 1) {
+          result += ' $version';
+        }
+      }
+      
+      return result;
+    }
+    
+    // Default formatting for other models
+    return cleaned
+        .split('-')
+        .where((part) => part.isNotEmpty && !RegExp(r'^\d+$').hasMatch(part))
+        .map((word) => word[0].toUpperCase() + word.substring(1).toLowerCase())
+        .join(' ');
+  }
+
+  Future<void> getProviders() async {
+    print('🔍 [Connection] Connecting to ${OpenCodeConfig.baseUrl}...');
+
+    try {
+      final uri = Uri.parse('${OpenCodeConfig.baseUrl}/config');
+      final response = await _client.get(
+        uri,
+        headers: {'Accept': 'application/json'},
+      );
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(response.body);
+        final String? modelString = data['model'];
+        if (modelString != null && modelString.contains('/')) {
+          final parts = modelString.split('/');
+          _providerID = parts[0];
+          _modelID = parts[1];
+          print('✅ [Connection] Connected to ${OpenCodeConfig.baseUrl} - Provider: $_providerID');
+        } else {
+          throw Exception('Invalid model format in config: $modelString');
+        }
+      } else {
+        print('❌ [Connection] Failed to connect to ${OpenCodeConfig.baseUrl} - Status: ${response.statusCode}');
+        throw Exception('Failed to get providers: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('❌ [Connection] Failed to connect to ${OpenCodeConfig.baseUrl} - Error: $e');
+      
+      if (e.toString().contains('No route to host') || e.toString().contains('Connection failed')) {
+        throw Exception('Cannot connect to OpenCode server at ${OpenCodeConfig.baseUrl}. Please check:\n'
+            '1. Tailscale is running and connected\n'
+            '2. OpenCode server is running at ${OpenCodeConfig.baseUrl}\n'
+            '3. Network connectivity is available');
+      }
+      
+      throw Exception('Failed to get providers: $e');
+    }
+  }
+
+  Future<bool> ping() async {
+    try {
+      final uri = Uri.parse('${OpenCodeConfig.baseUrl}/config');
+      final response = await _client.get(
+        uri,
+        headers: {'Accept': 'application/json'},
+      ).timeout(const Duration(seconds: 5));
+
+      return response.statusCode == 200;
+    } catch (e) {
+      print('❌ [Connection] Ping failed: $e');
+      return false;
+    }
+  }
+
+  Future<List<Session>> getSessions() async {
+    print(
+        '🔍 [OpenCodeClient] Getting sessions from ${OpenCodeConfig.baseUrl}/session');
+
+    try {
+      final uri = Uri.parse('${OpenCodeConfig.baseUrl}/session');
+      print('🔍 [OpenCodeClient] Making GET request to: $uri');
+
+      final response = await _client.get(
+        uri,
+        headers: {'Accept': 'application/json'},
+      );
+
+      print('🔍 [OpenCodeClient] Get sessions response: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(response.body);
+        print('🔍 [OpenCodeClient] Parsed ${data.length} sessions');
+
+        final sessions = data.map((json) => Session.fromJson(json)).toList();
+        print(
+            '🔍 [OpenCodeClient] Successfully created ${sessions.length} Session objects');
+
+        return sessions;
+      } else {
+        print(
+            '❌ [OpenCodeClient] Failed to load sessions: ${response.statusCode}');
+        throw Exception('Failed to load sessions: ${response.statusCode}');
+      }
+    } catch (e, stackTrace) {
+      print('❌ [OpenCodeClient] Get sessions failed with error: $e');
+      print('❌ [OpenCodeClient] Stack trace: $stackTrace');
+      rethrow;
+    }
+  }
+
+  Future<Session> createSession() async {
+    print(
+        '🔍 [OpenCodeClient] Creating new session at ${OpenCodeConfig.baseUrl}/session');
+
+    try {
+      final uri = Uri.parse('${OpenCodeConfig.baseUrl}/session');
+      final requestBody = json.encode({});
+
+      print('🔍 [OpenCodeClient] Making POST request to: $uri');
+      print('🔍 [OpenCodeClient] Request body: $requestBody');
+
+      final response = await _client.post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: requestBody,
+      );
+
+      print('🔍 [OpenCodeClient] Create session response:');
+      print('   Status Code: ${response.statusCode}');
+      print('   Headers: ${response.headers}');
+      // print('   Body: ${response.body}'); // REMOVED: Can contain large system prompts
+
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        final sessionData = json.decode(response.body);
+        // print('🔍 [OpenCodeClient] Parsed session data: $sessionData'); // REMOVED: Can contain large system prompts
+
+        final session = Session.fromJson(sessionData);
+        print(
+            '🔍 [OpenCodeClient] Successfully created session: ${session.id}');
+
+        return session;
+      } else {
+        print(
+            '❌ [OpenCodeClient] Failed to create session: ${response.statusCode}');
+        throw Exception('Failed to create session: ${response.statusCode}');
+      }
+    } catch (e, stackTrace) {
+      print('❌ [OpenCodeClient] Create session failed with error: $e');
+      print('❌ [OpenCodeClient] Stack trace: $stackTrace');
+      rethrow;
+    }
+  }
+
+  Future<OpenCodeMessage> sendMessage(String sessionId, String message) async {
+    print('🔍 [OpenCodeClient] Sending message to session $sessionId');
+    print('🔍 [OpenCodeClient] Message content: "$message"');
+
+    try {
+      final uri =
+          Uri.parse('${OpenCodeConfig.baseUrl}/session/$sessionId/message');
+      final requestBody = json.encode({
+        'providerID': _providerID,
+        'modelID': _modelID,
+        'parts': [
+          {'type': 'text', 'text': message}
+        ]
+      });
+
+      print('🔍 [OpenCodeClient] Making POST request to: $uri');
+      print('🔍 [OpenCodeClient] Request body: $requestBody');
+
+      final response = await _client.post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: requestBody,
+      );
+
+      // Only log errors, not successful responses
+
+      if (response.statusCode == 200) {
+        final messageData = json.decode(response.body);
+
+        if (messageData.containsKey('name') && messageData.containsKey('data')) {
+          final errorName = messageData['name'];
+          final errorMessage = messageData['data']['message'];
+          print('❌ [OpenCodeClient] Server returned error in 200 response: $errorName');
+          throw Exception('Failed to send message: $errorName - $errorMessage');
+        }
+
+        // The API response structure is different - it's the message directly
+        final openCodeMessage = OpenCodeMessage.fromApiResponse(messageData);
+        print('🔍 [OpenCodeClient] Successfully created message: ${openCodeMessage.id}');
+
+        return openCodeMessage;
+      } else {
+        print(
+            '❌ [OpenCodeClient] Failed to send message: ${response.statusCode}');
+        throw Exception('Failed to send message: ${response.statusCode}');
+      }
+    } catch (e, stackTrace) {
+      print('❌ [OpenCodeClient] Send message failed with error: $e');
+      print('❌ [OpenCodeClient] Stack trace: $stackTrace');
+      rethrow;
+    }
+  }
+
+  Future<void> abortSession(String sessionId) async {
+    print('🔍 [OpenCodeClient] Aborting session $sessionId');
+
+    try {
+      final uri =
+          Uri.parse('${OpenCodeConfig.baseUrl}/session/$sessionId/abort');
+
+      print('🔍 [OpenCodeClient] Making POST request to: $uri');
+
+      final response = await _client.post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      print('🔍 [OpenCodeClient] Abort session response:');
+      print('   Status Code: ${response.statusCode}');
+      print('   Headers: ${response.headers}');
+      // print('   Body: ${response.body}'); // REMOVED: Potentially verbose
+
+      if (response.statusCode == 200) {
+        print('🔍 [OpenCodeClient] Successfully aborted session $sessionId');
+      } else {
+        print(
+            '❌ [OpenCodeClient] Failed to abort session: ${response.statusCode}');
+        throw Exception('Failed to abort session: ${response.statusCode}');
+      }
+    } catch (e, stackTrace) {
+      print('❌ [OpenCodeClient] Abort session failed with error: $e');
+      print('❌ [OpenCodeClient] Stack trace: $stackTrace');
+      rethrow;
+    }
+  }
+
+  void dispose() {
+    print('🔍 [OpenCodeClient] Disposing HTTP client');
+    _client.close();
+  }
+}
+
