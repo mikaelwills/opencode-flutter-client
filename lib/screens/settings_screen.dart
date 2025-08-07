@@ -9,8 +9,8 @@ import '../blocs/connection/connection_bloc.dart';
 import '../blocs/connection/connection_event.dart';
 import '../blocs/session_list/session_list_bloc.dart';
 import '../blocs/session_list/session_list_event.dart';
-import '../blocs/chat/chat_bloc.dart';
-import '../blocs/chat/chat_state.dart';
+import '../blocs/session/session_bloc.dart';
+import '../widgets/terminal_button.dart';
 import 'package:dartssh2/dartssh2.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -22,21 +22,26 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   late TextEditingController _ipController;
+  late TextEditingController _portController;
   bool _isLoading = true;
   bool _isRestarting = false;
   String _originalIP = '';
+  int _originalPort = 4096;
 
   @override
   void initState() {
     super.initState();
     _ipController = TextEditingController();
+    _portController = TextEditingController();
     _loadCurrentIP();
 
     // Fallback timeout in case SharedPreferences hangs
     Future.delayed(const Duration(seconds: 3), () {
       if (mounted && _isLoading) {
         _ipController.text = '192.168.1.161';
+        _portController.text = '4096';
         _originalIP = '192.168.1.161';
+        _originalPort = 4096;
         setState(() {
           _isLoading = false;
         });
@@ -47,6 +52,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void dispose() {
     _ipController.dispose();
+    _portController.dispose();
     super.dispose();
   }
 
@@ -56,27 +62,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final currentState = configCubit.state;
 
       String savedIP = '192.168.1.161';
+      int savedPort = 4096;
+      
       if (currentState is ConfigLoaded) {
         savedIP = currentState.serverIp;
+        savedPort = currentState.port;
       } else {
         // Fallback to SharedPreferences if cubit state is not loaded
         final prefs = await SharedPreferences.getInstance();
         savedIP = prefs.getString('server_ip') ?? '192.168.1.161';
+        savedPort = prefs.getInt('server_port') ?? 4096;
       }
 
       if (mounted) {
         _ipController.text = savedIP;
+        _portController.text = savedPort.toString();
         _originalIP = savedIP;
+        _originalPort = savedPort;
         setState(() {
           _isLoading = false;
         });
       }
     } catch (e) {
-      print('Error loading IP: $e');
-      // Fallback to default IP if loading fails
+      print('Error loading IP and port: $e');
+      // Fallback to default values if loading fails
       if (mounted) {
         _ipController.text = '192.168.1.161';
+        _portController.text = '4096';
         _originalIP = '192.168.1.161';
+        _originalPort = 4096;
         setState(() {
           _isLoading = false;
         });
@@ -86,10 +100,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _saveIP() async {
     final newIP = _ipController.text.trim();
+    final portText = _portController.text.trim();
+    
     if (newIP.isEmpty) return;
+    
+    // Parse and validate port
+    int newPort = 4096; // default
+    if (portText.isNotEmpty) {
+      final parsedPort = int.tryParse(portText);
+      if (parsedPort == null || parsedPort < 1 || parsedPort > 65535) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Port must be a number between 1 and 65535'),
+              backgroundColor: OpenCodeTheme.error,
+            ),
+          );
+        }
+        return;
+      }
+      newPort = parsedPort;
+    }
 
-    // Check if IP hasn't changed
-    if (newIP == _originalIP) {
+    // Check if IP and port haven't changed
+    if (newIP == _originalIP && newPort == _originalPort) {
       context.go('/chat');
       return;
     }
@@ -97,13 +131,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       // Update via ConfigCubit (this handles SharedPreferences automatically)
       final configCubit = context.read<ConfigCubit>();
-      await configCubit.updateServer(newIP);
+      await configCubit.updateServer(newIP, port: newPort);
 
       // Show success message
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Server IP updated to $newIP'),
+            content: Text('Server updated to $newIP:$newPort'),
             backgroundColor: OpenCodeTheme.success,
           ),
         );
@@ -113,7 +147,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to save IP: $e'),
+            content: Text('Failed to save server settings: $e'),
             backgroundColor: OpenCodeTheme.error,
           ),
         );
@@ -132,9 +166,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final configCubit = context.read<ConfigCubit>();
       await configCubit.resetToDefault();
 
-      // Clear the text field
+      // Clear the text fields
       _ipController.clear();
+      _portController.clear();
       _originalIP = '';
+      _originalPort = 4096;
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -160,6 +196,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _deleteAllSessions() async {
+    // Capture context-dependent values before async operations
+    final currentSessionId = context.read<SessionBloc>().currentSessionId;
+    
+    final sessionListBloc = context.read<SessionListBloc>();
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
     // Show confirmation dialog
     final confirmed = await showDialog<bool>(
       context: context,
@@ -195,25 +237,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (confirmed != true) return;
 
     try {
-      // Get current session ID from ChatBloc to exclude it from deletion
-      final chatState = context.read<ChatBloc>().state;
-      String? currentSessionId;
-      
-      if (chatState is ChatReady) {
-        currentSessionId = chatState.sessionId;
-      } else if (chatState is ChatSendingMessage) {
-        currentSessionId = chatState.sessionId;
-      }
-      
       // Trigger delete all sessions event with exclusion
-      final sessionListBloc = context.read<SessionListBloc>();
       sessionListBloc.add(DeleteAllSessions(excludeSessionId: currentSessionId));
       
       if (mounted) {
         final message = currentSessionId != null
             ? 'Deleting all sessions except the active one...'
             : 'Deleting all sessions...';
-        ScaffoldMessenger.of(context).showSnackBar(
+        scaffoldMessenger.showSnackBar(
           SnackBar(
             content: Text(message),
             backgroundColor: OpenCodeTheme.warning,
@@ -222,7 +253,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        scaffoldMessenger.showSnackBar(
           SnackBar(
             content: Text('Failed to delete all sessions: $e'),
             backgroundColor: OpenCodeTheme.error,
@@ -341,6 +372,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // IP Address field
                 Container(
                   height: 56,
                   decoration: const BoxDecoration(
@@ -371,8 +403,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                       const SizedBox(width: 12),
 
-                      // Input field
+                      // IP Address input field
                       Flexible(
+                        flex: 3,
                         child: TextField(
                           controller: _ipController,
                           style: const TextStyle(
@@ -391,7 +424,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             contentPadding: EdgeInsets.zero,
                             isDense: true,
                             filled: false,
-                            hintText: 'Enter IP address',
+                            hintText: 'IP Address',
                             hintStyle: TextStyle(
                               color: OpenCodeTheme.textSecondary,
                             ),
@@ -399,6 +432,49 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           maxLines: 1,
                           keyboardType: const TextInputType.numberWithOptions(
                               decimal: true),
+                          textInputAction: TextInputAction.next,
+                        ),
+                      ),
+                      
+                      // Colon separator
+                      const Text(
+                        ':',
+                        style: TextStyle(
+                          fontFamily: 'FiraCode',
+                          fontSize: 14,
+                          color: OpenCodeTheme.text,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      
+                      // Port input field
+                      Flexible(
+                        flex: 1,
+                        child: TextField(
+                          controller: _portController,
+                          style: const TextStyle(
+                            fontFamily: 'FiraCode',
+                            fontSize: 14,
+                            color: OpenCodeTheme.text,
+                            height: 1.4,
+                          ),
+                          decoration: const InputDecoration(
+                            border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                            disabledBorder: InputBorder.none,
+                            errorBorder: InputBorder.none,
+                            focusedErrorBorder: InputBorder.none,
+                            contentPadding: EdgeInsets.zero,
+                            isDense: true,
+                            filled: false,
+                            hintText: 'Port',
+                            hintStyle: TextStyle(
+                              color: OpenCodeTheme.textSecondary,
+                            ),
+                          ),
+                          maxLines: 1,
+                          keyboardType: TextInputType.number,
                           textInputAction: TextInputAction.done,
                           onSubmitted: (_) => _saveIP(),
                         ),
@@ -407,141 +483,72 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                SizedBox(
+                TerminalButton(
+                  command: 'connect',
+                  type: TerminalButtonType.primary,
                   width: double.infinity,
-                  height: 48,
-                  child: ElevatedButton(
-                    onPressed: _saveIP,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF1A1A1A),
-                      foregroundColor: OpenCodeTheme.text,
-                      elevation: 0,
-                      side: const BorderSide(
-                        color: Color(0xFF333333),
-                        width: 1,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                    ),
-                    child: const Text('Save'),
-                  ),
+                  onPressed: _saveIP,
                 ),
                 const SizedBox(height: 16),
 
-                // Clear IP button for testing
-                SizedBox(
+                TerminalButton(
+                  command: 'disconnect',
+                  type: TerminalButtonType.warning,
                   width: double.infinity,
-                  height: 48,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      showDialog(
-                        context: context,
-                        builder: (BuildContext context) {
-                          return AlertDialog(
-                            backgroundColor: const Color(0xFF1A1A1A),
-                            title: const Text(
-                              'Clear IP Address',
-                              style: TextStyle(color: OpenCodeTheme.text),
-                            ),
-                            content: const Text(
-                              'This will clear the saved IP address and reset the app to first-launch state. Are you sure?',
-                              style:
-                                  TextStyle(color: OpenCodeTheme.textSecondary),
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.of(context).pop(),
-                                child: const Text(
-                                  'Cancel',
-                                  style: TextStyle(
-                                      color: OpenCodeTheme.textSecondary),
-                                ),
+                  onPressed: () {
+                    showDialog(
+                      context: context,
+                      builder: (BuildContext context) {
+                        return AlertDialog(
+                          backgroundColor: OpenCodeTheme.surface,
+                          title: const Text(
+                            'Clear IP Address',
+                            style: TextStyle(color: OpenCodeTheme.text),
+                          ),
+                          content: const Text(
+                            'This will clear the saved IP address and reset the app to first-launch state. Are you sure?',
+                            style: TextStyle(color: OpenCodeTheme.textSecondary),
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.of(context).pop(),
+                              child: const Text(
+                                'Cancel',
+                                style: TextStyle(color: OpenCodeTheme.textSecondary),
                               ),
-                              TextButton(
-                                onPressed: () {
-                                  Navigator.of(context).pop();
-                                  _clearIP();
-                                },
-                                child: const Text(
-                                  'Clear',
-                                  style: TextStyle(color: OpenCodeTheme.error),
-                                ),
+                            ),
+                            TextButton(
+                              onPressed: () {
+                                Navigator.of(context).pop();
+                                _clearIP();
+                              },
+                              child: const Text(
+                                'Clear',
+                                style: TextStyle(color: OpenCodeTheme.error),
                               ),
-                            ],
-                          );
-                        },
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF1A1A1A),
-                      foregroundColor: OpenCodeTheme.error,
-                      elevation: 0,
-                      side: const BorderSide(
-                        color: Color(0xFF333333),
-                        width: 1,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                    ),
-                    child: const Text('Disconnect'),
-                  ),
+                            ),
+                          ],
+                        );
+                      },
+                    );
+                  },
                 ),
 
                 const Spacer(),
-                // Delete All Sessions button
-                SizedBox(
+                TerminalButton(
+                  command: 'delete_all_sessions',
+                  type: TerminalButtonType.danger,
                   width: double.infinity,
-                  height: 48,
-                  child: ElevatedButton(
-                    onPressed: _deleteAllSessions,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF1A1A1A),
-                      foregroundColor: OpenCodeTheme.error,
-                      elevation: 0,
-                      side: const BorderSide(
-                        color: Color(0xFF333333),
-                        width: 1,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                    ),
-                    child: const Text('Delete All Sessions'),
-                  ),
+                  onPressed: _deleteAllSessions,
                 ),
                 const SizedBox(height: 16),
-                SizedBox(
+                TerminalButton(
+                  command: 'restart_server',
+                  type: TerminalButtonType.neutral,
                   width: double.infinity,
-                  height: 48,
-                  child: ElevatedButton(
-                    onPressed: _isRestarting ? null : _restartServer,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF1A1A1A),
-                      foregroundColor: OpenCodeTheme.text,
-                      elevation: 0,
-                      side: const BorderSide(
-                        color: Color(0xFF333333),
-                        width: 1,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                    ),
-                    child: _isRestarting
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                OpenCodeTheme.text,
-                              ),
-                            ),
-                          )
-                        : const Text('Restart Server'),
-                  ),
+                  isLoading: _isRestarting,
+                  loadingText: 'restarting',
+                  onPressed: _isRestarting ? null : _restartServer,
                 ),
                 const SizedBox(height: 16),
               ],

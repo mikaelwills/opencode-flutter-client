@@ -12,11 +12,8 @@ import '../widgets/prompt_field.dart';
 import '../widgets/connection_status_row.dart';
 
 class ChatScreen extends StatefulWidget {
-  final String? sessionId;
-
   const ChatScreen({
     super.key,
-    this.sessionId,
   });
 
   @override
@@ -35,22 +32,6 @@ class _ChatScreenState extends State<ChatScreen> {
     super.initState();
     _scrollController = ScrollController();
     _scrollController.addListener(_onScroll);
-
-    // Get sessionId from SessionBloc or use provided one
-    final sessionBloc = context.read<SessionBloc>();
-    final sessionState = sessionBloc.state;
-
-    String? sessionId = widget.sessionId;
-    if (sessionState is SessionLoaded) {
-      sessionId = sessionState.session.id;
-    }
-
-    if (sessionId != null && sessionId.isNotEmpty) {
-      print('🔍 [ChatScreen] Starting chat with session: $sessionId');
-      context.read<ChatBloc>().add(StartChat(sessionId: sessionId));
-    } else {
-      print('❌ [ChatScreen] No session available');
-    }
   }
 
   @override
@@ -100,12 +81,56 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        Column(
-          children: [
-            Expanded(
-              child: BlocListener<ChatBloc, ChatState>(
+    return BlocBuilder<SessionBloc, SessionState>(
+      builder: (context, sessionState) {
+        // Show loading while waiting for session to load
+        if (sessionState is SessionLoading || sessionState is SessionInitial || sessionState is SessionValidating) {
+          return const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircularProgressIndicator(color: OpenCodeTheme.primary),
+                SizedBox(height: 16),
+                Text(
+                  'Loading session...',
+                  style: TextStyle(color: OpenCodeTheme.textSecondary),
+                ),
+              ],
+            ),
+          );
+        }
+        
+        // Show error if session failed to load
+        if (sessionState is SessionError) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.error_outline,
+                  size: 48,
+                  color: OpenCodeTheme.error,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Session Error: ${sessionState.message}',
+                  style: const TextStyle(
+                    color: OpenCodeTheme.error,
+                    fontSize: 14,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          );
+        }
+
+        return Stack(
+        children: [
+          Column(
+            children: [
+              Expanded(
+                child: BlocListener<ChatBloc, ChatState>(
                 listener: (context, state) {
                   if (state is ChatReady) {
                     final currentMessageCount = state.messages.length;
@@ -244,7 +269,6 @@ class _ChatScreenState extends State<ChatScreen> {
                           placeholder: isSending
                               ? 'Sending message...'
                               : 'Type your message...',
-                          sessionId: _getSessionId(),
                         );
                       },
                     );
@@ -272,22 +296,9 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ),
         ),
-      ],
+        ],
+      );
+    },
     );
-  }
-
-  String _getSessionId() {
-    if (widget.sessionId != null && widget.sessionId!.isNotEmpty) {
-      return widget.sessionId!;
-    }
-
-    final sessionBloc = context.read<SessionBloc>();
-    final sessionState = sessionBloc.state;
-
-    if (sessionState is SessionLoaded) {
-      return sessionState.session.id;
-    }
-
-    return '';
   }
 }

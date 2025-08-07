@@ -39,3 +39,23 @@ class SessionUpdated extends SessionEvent {
   @override
   List<Object> get props => [session];
 }
+
+class LoadStoredSession extends SessionEvent {}
+
+class ValidateSession extends SessionEvent {
+  final String sessionId;
+
+  const ValidateSession(this.sessionId);
+
+  @override
+  List<Object> get props => [sessionId];
+}
+
+class SetCurrentSession extends SessionEvent {
+  final String sessionId;
+
+  const SetCurrentSession(this.sessionId);
+
+  @override
+  List<Object> get props => [sessionId];
+}

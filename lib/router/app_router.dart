@@ -4,6 +4,7 @@ import '../screens/connect_screen.dart';
 import '../screens/chat_screen.dart';
 import '../screens/sessions_screen.dart';
 import '../screens/settings_screen.dart';
+import '../screens/provider_list_screen.dart';
 import '../widgets/main_scaffold.dart';
 
 final GoRouter appRouter = GoRouter(
@@ -42,6 +43,14 @@ final GoRouter appRouter = GoRouter(
           pageBuilder: (context, state) => _buildFadeTransitionPage(
             key: state.pageKey,
             child: const SettingsScreen(),
+          ),
+        ),
+        GoRoute(
+          path: '/provider-list',
+          name: 'provider-list',
+          pageBuilder: (context, state) => _buildFadeTransitionPage(
+            key: state.pageKey,
+            child: const ProviderListScreen(),
           ),
         ),
       ],

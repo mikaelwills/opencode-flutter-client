@@ -5,9 +5,9 @@ import '../theme/opencode_theme.dart';
 import '../blocs/session_list/session_list_bloc.dart';
 import '../blocs/session_list/session_list_event.dart';
 import '../blocs/session_list/session_list_state.dart';
-import '../blocs/chat/chat_bloc.dart';
-import '../blocs/chat/chat_event.dart';
-import '../blocs/chat/chat_state.dart';
+import '../blocs/session/session_bloc.dart';
+import '../blocs/session/session_event.dart';
+import '../blocs/session/session_state.dart';
 import '../models/session.dart';
 
 class SessionsScreen extends StatefulWidget {
@@ -119,21 +119,29 @@ class _SessionsScreenState extends State<SessionsScreen> {
               onRefresh: () async {
                 context.read<SessionListBloc>().add(RefreshSessions());
               },
-              child: ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: state.sessions.length,
-                itemBuilder: (context, index) {
-                  final session = state.sessions[index];
-                  final isDeleting = state is SessionDeleting && 
-                      (state as SessionDeleting).deletingSessionId == session.id;
+              child: BlocBuilder<SessionBloc, SessionState>(
+                builder: (context, sessionState) {
+                  final currentSessionId = context.read<SessionBloc>().currentSessionId;
+                  
+                  return ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: state.sessions.length,
+                    itemBuilder: (context, index) {
+                      final session = state.sessions[index];
+                      final isDeleting = state is SessionDeleting && 
+                          (state as SessionDeleting).deletingSessionId == session.id;
+                      final isCurrentSession = session.id == currentSessionId;
 
-                  return SessionCard(
-                    session: session,
-                    isDeleting: isDeleting,
-                    onTap: () => _selectSession(context, session),
-                    onDelete: () => _showDeleteConfirmation(context, session),
+                      return SessionCard(
+                        session: session,
+                        isDeleting: isDeleting,
+                        isCurrentSession: isCurrentSession,
+                        onTap: () => _selectSession(context, session),
+                        onDelete: () => _showDeleteConfirmation(context, session),
+                      );
+                    },
                   );
-                },
+                }
               ),
             );
           }
@@ -144,11 +152,8 @@ class _SessionsScreenState extends State<SessionsScreen> {
   }
 
   void _selectSession(BuildContext context, Session session) {
-    // Clear ChatBloc state first
-    context.read<ChatBloc>().add(ClearChat());
-    
-    // Start chat with the selected session
-    context.read<ChatBloc>().add(StartChat(sessionId: session.id));
+    // Set current session in SessionBloc - ChatBloc will automatically load messages
+    context.read<SessionBloc>().add(SetCurrentSession(session.id));
     
     // Navigate to chat screen
     context.go('/chat');
@@ -156,14 +161,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
 
   void _showDeleteConfirmation(BuildContext context, Session session) {
     // Check if this is the current active session
-    final chatState = context.read<ChatBloc>().state;
-    String? currentSessionId;
-    
-    if (chatState is ChatReady) {
-      currentSessionId = chatState.sessionId;
-    } else if (chatState is ChatSendingMessage) {
-      currentSessionId = chatState.sessionId;
-    }
+    final currentSessionId = context.read<SessionBloc>().currentSessionId;
     
     // If this is the current active session, show info dialog instead
     if (currentSessionId == session.id) {
@@ -237,6 +235,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
 class SessionCard extends StatelessWidget {
   final Session session;
   final bool isDeleting;
+  final bool isCurrentSession;
   final VoidCallback onTap;
   final VoidCallback onDelete;
 
@@ -244,6 +243,7 @@ class SessionCard extends StatelessWidget {
     super.key,
     required this.session,
     required this.isDeleting,
+    required this.isCurrentSession,
     required this.onTap,
     required this.onDelete,
   });
@@ -251,30 +251,55 @@ class SessionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      color: OpenCodeTheme.surface,
+      color: isCurrentSession ? OpenCodeTheme.primary.withOpacity(0.1) : OpenCodeTheme.surface,
+      elevation: isCurrentSession ? 4 : 1,
       margin: const EdgeInsets.only(bottom: 12),
-      child: InkWell(
-        onTap: isDeleting ? null : onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
+      child: Container(
+        decoration: isCurrentSession 
+          ? BoxDecoration(
+              border: Border.all(
+                color: OpenCodeTheme.primary.withOpacity(0.3),
+                width: 1,
+              ),
+              borderRadius: BorderRadius.circular(8),
+            )
+          : null,
+        child: InkWell(
+          onTap: isDeleting ? null : onTap,
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
             children: [
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      session.description.isEmpty 
-                          ? 'Session ${session.id.substring(0, 8)}...'
-                          : session.description,
-                      style: const TextStyle(
-                        color: OpenCodeTheme.text,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            session.description.isEmpty 
+                                ? 'Session ${session.id}'
+                                : session.description,
+                            style: TextStyle(
+                              color: OpenCodeTheme.text,
+                              fontSize: 16,
+                              fontWeight: isCurrentSession ? FontWeight.w600 : FontWeight.w500,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (isCurrentSession) ...[
+                          const SizedBox(width: 8),
+                          const Icon(
+                            Icons.radio_button_checked,
+                            size: 16,
+                            color: OpenCodeTheme.primary,
+                          ),
+                        ],
+                      ],
                     ),
                     const SizedBox(height: 8),
                     Row(
@@ -330,6 +355,7 @@ class SessionCard extends StatelessWidget {
                 ),
             ],
           ),
+        ),
         ),
       ),
     );

@@ -46,3 +46,21 @@ class MessageSending extends SessionState {
   @override
   List<Object> get props => [session];
 }
+
+class SessionValidating extends SessionState {
+  final String sessionId;
+
+  const SessionValidating(this.sessionId);
+
+  @override
+  List<Object> get props => [sessionId];
+}
+
+class SessionNotFound extends SessionState {
+  final String sessionId;
+
+  const SessionNotFound(this.sessionId);
+
+  @override
+  List<Object> get props => [sessionId];
+}

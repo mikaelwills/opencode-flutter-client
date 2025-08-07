@@ -113,8 +113,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       connection_states.ConnectionState>(
                     listener: (context, connectionState) {
                       // Auto-navigate to ChatScreen when session is ready
-                      if (connectionState is connection_states.ConnectedWithSession) {
-                        print('🔍 [HomeScreen] Auto-navigating to ChatScreen with session: ${connectionState.sessionId}');
+                      if (connectionState is connection_states.Connected) {
+                        print('🔍 [HomeScreen] Auto-navigating to ChatScreen - connection established');
                         context.go('/chat');
                       }
                     },
@@ -141,12 +141,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
                         // Second priority: Show chat screen when connected AND chat is ready
                         if ((chatState is ChatReady || chatState is ChatSendingMessage) && 
-                            connectionState is connection_states.ConnectedWithSession) {
-                          return ChatScreen(sessionId: 
-                            chatState is ChatReady 
-                              ? chatState.sessionId 
-                              : (chatState as ChatSendingMessage).sessionId
-                          );
+                            connectionState is connection_states.Connected) {
+                          return const ChatScreen();
                         }
 
                         // Fallback: Show status UI for other states
@@ -283,7 +279,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (chatState is ChatError) return 'Error: ${chatState.error}';
     if (chatState is ChatSendingMessage) return 'Starting session...';
 
-    if (connectionState is connection_states.ConnectedWithSession) {
+    if (connectionState is connection_states.Connected) {
       return 'Ready to start coding';
     }
     if (connectionState is connection_states.Reconnecting) {

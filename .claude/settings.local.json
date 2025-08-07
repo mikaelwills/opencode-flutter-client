@@ -3,7 +3,8 @@
     "allow": [
       "Bash(flutter analyze:*)",
       "mcp__obsidian-vault__get_workspace_files",
-      "mcp__obsidian-vault__view"
+      "mcp__obsidian-vault__view",
+      "mcp__obsidian-vault__str_replace"
     ],
     "deny": []
   }

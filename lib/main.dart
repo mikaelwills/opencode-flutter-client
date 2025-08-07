@@ -7,9 +7,11 @@ import 'services/opencode_client.dart';
 import 'services/sse_service.dart';
 import 'blocs/connection/connection_bloc.dart';
 import 'blocs/session/session_bloc.dart';
+import 'blocs/session/session_event.dart';
 import 'blocs/session_list/session_list_bloc.dart';
 import 'blocs/chat/chat_bloc.dart';
 import 'blocs/config/config_cubit.dart';
+import 'blocs/config/config_state.dart';
 import 'router/app_router.dart';
 import 'config/opencode_config.dart';
 
@@ -24,21 +26,39 @@ void main() async {
   OpenCodeConfig.setConfigCubit(configCubit);
 
   final openCodeClient = OpenCodeClient();
+  
+  // Apply saved provider/model settings if available
+  final configState = configCubit.state;
+  if (configState is ConfigLoaded && 
+      configState.selectedProviderID != null && 
+      configState.selectedModelID != null) {
+    openCodeClient.setProvider(
+      configState.selectedProviderID!, 
+      configState.selectedModelID!
+    );
+  }
+
+  // Create SessionBloc and initialize with stored session
+  final sessionBloc = SessionBloc(openCodeClient: openCodeClient);
+  sessionBloc.add(LoadStoredSession());
 
   runApp(OpenCodeApp(
     openCodeClient: openCodeClient, 
     configCubit: configCubit,
+    sessionBloc: sessionBloc,
   ));
 }
 
 class OpenCodeApp extends StatelessWidget {
   final OpenCodeClient openCodeClient;
   final ConfigCubit configCubit;
+  final SessionBloc sessionBloc;
 
   const OpenCodeApp({
     super.key, 
     required this.openCodeClient,
     required this.configCubit,
+    required this.sessionBloc,
   });
 
   @override
@@ -51,11 +71,7 @@ class OpenCodeApp extends StatelessWidget {
       child: MultiBlocProvider(
         providers: [
           BlocProvider<ConfigCubit>.value(value: configCubit),
-          BlocProvider<SessionBloc>(
-            create: (context) => SessionBloc(
-              openCodeClient: context.read<OpenCodeClient>(),
-            ),
-          ),
+          BlocProvider<SessionBloc>.value(value: sessionBloc),
           BlocProvider<SessionListBloc>(
             create: (context) => SessionListBloc(
               openCodeClient: context.read<OpenCodeClient>(),
@@ -64,13 +80,14 @@ class OpenCodeApp extends StatelessWidget {
           BlocProvider<ConnectionBloc>(
             create: (context) => ConnectionBloc(
               openCodeClient: context.read<OpenCodeClient>(),
-              sessionBloc: context.read<SessionBloc>(),
+              sessionBloc: sessionBloc,
             ),
           ),
           BlocProvider<ChatBloc>(
             create: (context) => ChatBloc(
-              sessionBloc: context.read<SessionBloc>(),
+              sessionBloc: sessionBloc,
               sseService: context.read<SSEService>(),
+              openCodeClient: context.read<OpenCodeClient>(),
             ),
           ),
         ],

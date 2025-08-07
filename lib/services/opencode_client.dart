@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import '../config/opencode_config.dart';
 import '../models/session.dart';
 import '../models/opencode_message.dart';
+import '../models/provider.dart';
 
 class OpenCodeClient {
   final http.Client _client = http.Client();
@@ -293,6 +294,7 @@ class OpenCodeClient {
     }
   }
 
+
   Future<void> deleteSession(String sessionId) async {
     print('🔍 [OpenCodeClient] Deleting session $sessionId');
 
@@ -382,7 +384,7 @@ class OpenCodeClient {
         print('❌ [OpenCodeClient] Failed to generate summary: ${response.statusCode} - ${response.body}');
         throw Exception('Failed to generate summary: ${response.statusCode} - ${response.body}');
       }
-    } catch (e, stackTrace) {
+    } catch (e) {
       print('❌ [OpenCodeClient] Generate summary failed with error: $e');
       rethrow;
     }
@@ -429,7 +431,7 @@ class OpenCodeClient {
         final response = await _client.post(
           uri,
           headers: {'Content-Type': 'application/json'},
-          body: body != null ? json.encode(body) : null,
+          body: json.encode(body),
         );
 
         if (response.statusCode == 200) {
@@ -475,6 +477,42 @@ class OpenCodeClient {
       print('❌ [OpenCodeClient] Stack trace: $stackTrace');
       rethrow;
     }
+  }
+
+  Future<ProvidersResponse> getAvailableProviders() async {
+    print('🔍 [OpenCodeClient] Getting available providers from ${OpenCodeConfig.baseUrl}/config/providers');
+
+    try {
+      final uri = Uri.parse('${OpenCodeConfig.baseUrl}/config/providers');
+      final response = await _client.get(
+        uri,
+        headers: {'Accept': 'application/json'},
+      );
+
+      print('🔍 [OpenCodeClient] Get providers response: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(response.body);
+        final providersResponse = ProvidersResponse.fromJson(data);
+        
+        print('🔍 [OpenCodeClient] Successfully loaded ${providersResponse.providers.length} providers');
+        return providersResponse;
+      } else {
+        print('❌ [OpenCodeClient] Failed to get providers: ${response.statusCode}');
+        throw Exception('Failed to get providers: ${response.statusCode}');
+      }
+    } catch (e, stackTrace) {
+      print('❌ [OpenCodeClient] Get providers failed with error: $e');
+      print('❌ [OpenCodeClient] Stack trace: $stackTrace');
+      rethrow;
+    }
+  }
+
+  void setProvider(String providerID, String modelID) {
+    print('🔍 [OpenCodeClient] Setting provider: $providerID, model: $modelID');
+    _providerID = providerID;
+    _modelID = modelID;
+    print('✅ [OpenCodeClient] Provider updated successfully');
   }
 
   void dispose() {

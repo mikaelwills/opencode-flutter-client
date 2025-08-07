@@ -12,7 +12,6 @@ class SessionListBloc extends Bloc<SessionListEvent, SessionListState> {
   SessionListBloc({required this.openCodeClient}) : super(SessionListInitial()) {
     on<LoadSessions>(_onLoadSessions);
     on<DeleteSession>(_onDeleteSession);
-    on<SelectSession>(_onSelectSession);
     on<RefreshSessions>(_onRefreshSessions);
     on<UpdateSessionSummary>(_onUpdateSessionSummary);
     on<SetSessionLoadingState>(_onSetSessionLoadingState);
@@ -67,16 +66,6 @@ class SessionListBloc extends Bloc<SessionListEvent, SessionListState> {
       emit(SessionListError('Failed to delete session: ${e.toString()}'));
       // Restore previous state on error
       emit(currentState);
-    }
-  }
-
-  Future<void> _onSelectSession(
-    SelectSession event,
-    Emitter<SessionListState> emit,
-  ) async {
-    final currentState = state;
-    if (currentState is SessionListLoaded) {
-      emit(currentState.copyWith(selectedSessionId: event.sessionId));
     }
   }
 
@@ -193,11 +182,53 @@ class SessionListBloc extends Bloc<SessionListEvent, SessionListState> {
     }
   }
 
+  bool _isGenericDescription(String description) {
+    if (description.isEmpty) return true;
+    
+    // Filter out "New Session -" prefix (already handled in Session model)
+    if (description.startsWith('New Session -')) return true;
+    
+    // Filter out "Session {id}" pattern - likely generic session ID
+    if (description.startsWith('Session ') && description.length < 50) {
+      return true;
+    }
+    
+    // Filter out "Starting new conversation" variants - generic auto-generated text
+    if (description == 'Starting a new conversation' ||
+        description == 'Starting new conversation') {
+      return true;
+    }
+    
+    // Filter out very short descriptions that are likely auto-generated
+    if (description.length < 10 && 
+        (description.toLowerCase().contains('session') || 
+         description.toLowerCase().contains('chat'))) {
+      return true;
+    }
+    
+    return false;
+  }
+
   Future<void> _loadSessionSummaries(List<Session> sessions) async {
+    print('🔍 Starting summary generation for ${sessions.length} sessions...');
+    int processedCount = 0;
+    int skippedCount = 0;
+    int generatedCount = 0;
+    
     for (final session in sessions) {
+      processedCount++;
+      print('🔍 Processing session $processedCount/${sessions.length}: ${session.id}');
+      // Skip if session already has a meaningful (non-generic) description
+      if (!_isGenericDescription(session.description)) {
+        skippedCount++;
+        print('⏭️ Skipping session ${session.id} - already has meaningful description: "${session.description}"');
+        continue;
+      }
+
       // Check cache first
       final cachedSummary = await _getCachedSummary(session.id);
       if (cachedSummary != null) {
+        print('💾 Using cached summary for session ${session.id}');
         add(UpdateSessionSummary(session.id, cachedSummary));
         continue;
       }
@@ -207,15 +238,21 @@ class SessionListBloc extends Bloc<SessionListEvent, SessionListState> {
 
       // Load summary from server
       try {
+        print('🔄 Generating summary for session ${session.id}...');
         final summary = await openCodeClient.generateSessionSummary(session.id);
+        generatedCount++;
+        print('✅ Generated summary for session ${session.id}: "${summary.length > 50 ? "${summary.substring(0, 50)}..." : summary}"');
         add(UpdateSessionSummary(session.id, summary));
       } catch (e) {
-        print('Failed to load summary for session ${session.id}: $e');
+        print('❌ Failed to load summary for session ${session.id}: $e');
         // Mark as failed and don't retry
         await _cacheSummary(session.id, '');
         add(UpdateSessionSummary(session.id, ''));
+        // Continue with next session even if this one failed
       }
     }
+    
+    print('✅ Summary generation completed: $processedCount sessions processed, $skippedCount skipped (meaningful), $generatedCount generated');
   }
 
   Future<String?> _getCachedSummary(String sessionId) async {

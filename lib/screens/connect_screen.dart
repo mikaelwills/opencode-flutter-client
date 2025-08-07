@@ -21,8 +21,10 @@ class ConnectScreen extends StatefulWidget {
 
 class _ConnectScreenState extends State<ConnectScreen> {
   final TextEditingController _ipController = TextEditingController();
+  final TextEditingController _portController = TextEditingController();
   bool _isConnecting = false;
   String? _savedIP;
+  int? _savedPort;
 
   @override
   void initState() {
@@ -33,6 +35,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
   @override
   void dispose() {
     _ipController.dispose();
+    _portController.dispose();
     super.dispose();
   }
 
@@ -40,22 +43,46 @@ class _ConnectScreenState extends State<ConnectScreen> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final savedIP = prefs.getString('server_ip');
+      final savedPort = prefs.getInt('server_port') ?? 4096;
+      
       if (mounted) {
         setState(() {
           _savedIP = savedIP;
+          _savedPort = savedPort;
           if (savedIP != null) {
             _ipController.text = savedIP;
+            _portController.text = savedPort.toString();
           }
         });
       }
     } catch (e) {
-      print('Error loading saved IP: $e');
+      print('Error loading saved IP and port: $e');
     }
   }
 
   Future<void> _connectToIP() async {
     final ip = _ipController.text.trim();
+    final portText = _portController.text.trim();
+    
     if (ip.isEmpty) return;
+    
+    // Parse and validate port
+    int port = 4096; // default
+    if (portText.isNotEmpty) {
+      final parsedPort = int.tryParse(portText);
+      if (parsedPort == null || parsedPort < 1 || parsedPort > 65535) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Port must be a number between 1 and 65535'),
+              backgroundColor: OpenCodeTheme.error,
+            ),
+          );
+        }
+        return;
+      }
+      port = parsedPort;
+    }
 
     setState(() {
       _isConnecting = true;
@@ -64,11 +91,12 @@ class _ConnectScreenState extends State<ConnectScreen> {
     try {
       // Update via ConfigCubit (this handles SharedPreferences automatically)
       final configCubit = context.read<ConfigCubit>();
-      await configCubit.updateServer(ip);
+      await configCubit.updateServer(ip, port: port);
 
-      // Update saved IP state
+      // Update saved state
       setState(() {
         _savedIP = ip;
+        _savedPort = port;
       });
 
       // Trigger connection check
@@ -80,7 +108,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to save IP: $e'),
+            content: Text('Failed to save server settings: $e'),
             backgroundColor: OpenCodeTheme.error,
           ),
         );
@@ -102,12 +130,13 @@ class _ConnectScreenState extends State<ConnectScreen> {
       listeners: [
         BlocListener<ConfigCubit, ConfigState>(
           listener: (context, configState) {
-            // Update saved IP when config changes
+            // Update saved IP and port when config changes
             if (configState is ConfigLoaded) {
               setState(() {
                 _savedIP = configState.serverIp == '0.0.0.0'
                     ? null
                     : configState.serverIp;
+                _savedPort = configState.port;
               });
             }
           },
@@ -115,7 +144,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
         BlocListener<ConnectionBloc, connection_states.ConnectionState>(
           listener: (context, connectionState) {
             // Auto-navigate to ChatScreen when session is ready
-            if (connectionState is connection_states.ConnectedWithSession) {
+            if (connectionState is connection_states.Connected) {
               context.go('/chat');
             }
           },
@@ -138,19 +167,16 @@ class _ConnectScreenState extends State<ConnectScreen> {
                 return ipInputWidget;
               }
 
-              // First priority: Show IP input if disconnected or no saved IP
-              if (_savedIP == null ||
+              // First priority: Show IP input if disconnected or no saved IP/port
+              if (_savedIP == null || _savedPort == null ||
                   connectionState is connection_states.Disconnected) {
                 return ipInputWidget;
               }
 
               // Second priority: Show chat screen when connected AND chat is ready
               if ((chatState is ChatReady || chatState is ChatSendingMessage) &&
-                  connectionState is connection_states.ConnectedWithSession) {
-                return ChatScreen(
-                    sessionId: chatState is ChatReady
-                        ? chatState.sessionId
-                        : (chatState as ChatSendingMessage).sessionId);
+                  connectionState is connection_states.Connected) {
+                return const ChatScreen();
               }
 
               // Fallback: Show status UI for other states
@@ -201,7 +227,10 @@ class _ConnectScreenState extends State<ConnectScreen> {
                 ),
               ),
               const SizedBox(width: 12),
+              
+              // IP Address input field
               Flexible(
+                flex: 3,
                 child: TextField(
                   controller: _ipController,
                   style: const TextStyle(
@@ -220,7 +249,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
                     contentPadding: EdgeInsets.zero,
                     isDense: true,
                     filled: false,
-                    hintText: '0.0.0.0',
+                    hintText: 'IP Address',
                     hintStyle: TextStyle(
                       color: OpenCodeTheme.textSecondary,
                     ),
@@ -228,6 +257,49 @@ class _ConnectScreenState extends State<ConnectScreen> {
                   maxLines: 1,
                   keyboardType:
                       const TextInputType.numberWithOptions(decimal: true),
+                  textInputAction: TextInputAction.next,
+                ),
+              ),
+              
+              // Colon separator
+              const Text(
+                ':',
+                style: TextStyle(
+                  fontFamily: 'FiraCode',
+                  fontSize: 14,
+                  color: OpenCodeTheme.text,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              
+              // Port input field
+              Flexible(
+                flex: 1,
+                child: TextField(
+                  controller: _portController,
+                  style: const TextStyle(
+                    fontFamily: 'FiraCode',
+                    fontSize: 14,
+                    color: OpenCodeTheme.text,
+                    height: 1.4,
+                  ),
+                  decoration: const InputDecoration(
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    disabledBorder: InputBorder.none,
+                    errorBorder: InputBorder.none,
+                    focusedErrorBorder: InputBorder.none,
+                    contentPadding: EdgeInsets.zero,
+                    isDense: true,
+                    filled: false,
+                    hintText: 'Port',
+                    hintStyle: TextStyle(
+                      color: OpenCodeTheme.textSecondary,
+                    ),
+                  ),
+                  maxLines: 1,
+                  keyboardType: TextInputType.number,
                   textInputAction: TextInputAction.done,
                   onSubmitted: (_) => _connectToIP(),
                 ),
@@ -288,7 +360,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
     if (chatState is ChatError) return 'Error: ${chatState.error}';
     if (chatState is ChatSendingMessage) return 'Starting session...';
 
-    if (connectionState is connection_states.ConnectedWithSession) {
+    if (connectionState is connection_states.Connected) {
       return 'Ready to start coding';
     }
     if (connectionState is connection_states.Reconnecting) {

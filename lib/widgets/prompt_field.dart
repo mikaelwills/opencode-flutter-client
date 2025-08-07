@@ -9,14 +9,12 @@ class PromptField extends StatefulWidget {
   final Function(String)? onSendMessage;
   final bool isEnabled;
   final String placeholder;
-  final String? sessionId;
 
   const PromptField({
     super.key,
     this.onSendMessage,
     this.isEnabled = true,
     this.placeholder = 'Type your message...',
-    this.sessionId,
   });
 
   @override
@@ -62,11 +60,8 @@ class _PromptFieldState extends State<PromptField> {
         final stateSessionId = _getSessionId(state);
         
         
-        // Show cancel button when working and session IDs match (or when widget.sessionId is null/empty)
-        final showCancelButton = isWorking && 
-                                 (widget.sessionId == null || 
-                                  widget.sessionId!.isEmpty || 
-                                  stateSessionId == widget.sessionId);
+        // Show cancel button when working
+        final showCancelButton = isWorking;
 
         return Container(
           margin: const EdgeInsets.only(left: 16, right: 16),
@@ -123,7 +118,7 @@ class _PromptFieldState extends State<PromptField> {
               // Cancel button (only during active streaming)
               if (showCancelButton) ...[
                 const SizedBox(width: 10),
-                CancelButton(sessionId: stateSessionId ?? widget.sessionId ?? ''),
+                CancelButton(sessionId: stateSessionId ?? ''),
                 const SizedBox(width: 10),
               ],
             ],

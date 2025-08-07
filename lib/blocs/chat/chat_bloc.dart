@@ -2,8 +2,9 @@ import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../session/session_bloc.dart';
 import '../session/session_event.dart' as session_events;
-import '../session/session_state.dart' as session_states;
+import '../session/session_state.dart';
 import '../../services/sse_service.dart';
+import '../../services/opencode_client.dart';
 import '../../models/opencode_message.dart';
 import '../../models/opencode_event.dart';
 import '../../models/message_part.dart';
@@ -13,59 +14,83 @@ import 'chat_state.dart';
 class ChatBloc extends Bloc<ChatEvent, ChatState> {
   final SessionBloc sessionBloc;
   final SSEService sseService;
+  final OpenCodeClient openCodeClient;
 
   final List<OpenCodeMessage> _messages = [];
   final Map<String, int> _messageIndex = {}; // messageId -> index mapping
-  String? _currentSessionId;
   StreamSubscription? _eventSubscription;
-  StreamSubscription? _sessionSubscription;
+  StreamSubscription? _sessionSubscription; // For temporary subscriptions (e.g., in _onSendChatMessage)
+  StreamSubscription? _permanentSessionSubscription; // For constructor subscription
 
   static const int _maxMessages = 100;
 
   ChatBloc({
     required this.sessionBloc,
     required this.sseService,
+    required this.openCodeClient,
   }) : super(ChatInitial()) {
-    on<StartChat>(_onStartChat);
+    on<LoadMessagesForCurrentSession>(_onLoadMessagesForCurrentSession);
     on<SendChatMessage>(_onSendChatMessage);
     on<CancelCurrentOperation>(_onCancelCurrentOperation);
-    on<ChatSessionChanged>(_onChatSessionChanged);
     on<SSEEventReceived>(_onSSEEventReceived);
     on<SSEErrorOccurred>(_onSSEErrorOccurred);
     on<ClearMessages>(_onClearMessages);
     on<ClearChat>(_onClearChat);
     on<AddUserMessage>(_onAddUserMessage);
+    
+    // Listen to SessionBloc for session changes (permanent subscription)
+    _permanentSessionSubscription = sessionBloc.stream.listen((sessionState) {
+      if (sessionState is SessionLoaded) {
+        add(LoadMessagesForCurrentSession());
+      }
+    });
   }
 
-  Future<void> _onStartChat(
-    StartChat event,
+  Future<void> _onLoadMessagesForCurrentSession(
+    LoadMessagesForCurrentSession event,
     Emitter<ChatState> emit,
   ) async {
+    final currentSessionId = sessionBloc.currentSessionId;
+    
+    if (currentSessionId == null) {
+      emit(const ChatError('No current session available'));
+      return;
+    }
+
     try {
-      print(
-          '🔍 [ChatBloc] Starting chat with existing session: ${event.sessionId}');
+      print('🔍 [ChatBloc] Loading messages for current session: $currentSessionId');
+      
+      emit(ChatConnecting());
 
-      // Use existing session (no creation needed)
-      final sessionId = event.sessionId;
+      // Clear current state
+      _messages.clear();
+      _messageIndex.clear();
 
-      // Start listening for SSE events directly
-      _startListening(sessionId);
-      emit(ChatReady(sessionId: sessionId, messages: _messages));
-
-      // If there's an initial message, send it immediately
-      if (event.initialMessage != null && event.initialMessage!.isNotEmpty) {
-        add(SendChatMessage(event.initialMessage!));
+      // Load message history from API
+      final messages = await openCodeClient.getSessionMessages(currentSessionId);
+      
+      // Add messages to local state
+      for (final message in messages) {
+        _messages.add(message);
+        _messageIndex[message.id] = _messages.length - 1;
       }
+      
+      print('🔍 [ChatBloc] Loaded ${messages.length} messages for session $currentSessionId');
+
+      // Start listening for new SSE events (without clearing messages)
+      _startListening(currentSessionId);
+      
+      // Emit ready state with loaded messages
+      emit(ChatReady(sessionId: currentSessionId, messages: List.from(_messages)));
+      
     } catch (e) {
-      emit(ChatError('Failed to start chat: ${e.toString()}'));
+      print('❌ [ChatBloc] Failed to load messages for current session: $e');
+      emit(ChatError('Failed to load messages: ${e.toString()}'));
     }
   }
 
   void _startListening(String sessionId) {
-    print('🔍 [ChatBloc] Starting to listen for session: $sessionId');
-    _currentSessionId = sessionId;
-    _messages.clear();
-    _messageIndex.clear();
+    print('🔍 [ChatBloc] Starting SSE listener for session: $sessionId');
 
     // Cancel any existing subscription
     _eventSubscription?.cancel();
@@ -76,7 +101,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         // No logging here - handled in SSEService
 
         // Only process events for the current session
-        if (sseEvent.sessionId == _currentSessionId) {
+        if (sseEvent.sessionId == sessionBloc.currentSessionId) {
           add(SSEEventReceived(sseEvent));
         }
       },
@@ -119,7 +144,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       // Listen for session response without blocking
       _sessionSubscription?.cancel();
       _sessionSubscription = sessionBloc.stream.listen((sessionState) {
-        if (sessionState is session_states.SessionLoaded) {
+        if (sessionState is SessionLoaded) {
           // Return to ready state after message is sent
           final actuallyStreaming = _messages.isNotEmpty &&
               _messages.last.role == 'assistant' &&
@@ -127,7 +152,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           print('🔧 Session response: actuallyStreaming=$actuallyStreaming');
           emit(_createChatReadyState(isStreaming: actuallyStreaming));
           _sessionSubscription?.cancel();
-        } else if (sessionState is session_states.SessionError) {
+        } else if (sessionState is SessionError) {
           emit(ChatError(sessionState.message));
           _sessionSubscription?.cancel();
         }
@@ -138,7 +163,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   void _addUserMessage(String sessionId, String content) {
-    if (sessionId == _currentSessionId) {
+    if (sessionId == sessionBloc.currentSessionId) {
       // Check if we already have a user message with the same content to prevent duplicates
       final existingUserMessages = _messages.where((msg) =>
           msg.role == 'user' &&
@@ -192,14 +217,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
   }
 
-  void _onChatSessionChanged(
-    ChatSessionChanged event,
-    Emitter<ChatState> emit,
-  ) {
-    _startListening(event.sessionId);
-    emit(_createChatReadyState());
-  }
-
   void _onSSEEventReceived(
     SSEEventReceived event,
     Emitter<ChatState> emit,
@@ -207,7 +224,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final sseEvent = event.event;
 
     // Only process events for the current session
-    if (sseEvent.sessionId != _currentSessionId) {
+    if (sseEvent.sessionId != sessionBloc.currentSessionId) {
       print('❌ [ChatBloc] Session ID mismatch - ignoring event');
       return;
     }
@@ -258,7 +275,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ) {
     _messages.clear();
     _messageIndex.clear();
-    if (_currentSessionId != null) {
+    if (sessionBloc.currentSessionId != null) {
       emit(_createChatReadyState());
     }
   }
@@ -270,7 +287,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     // Clear all chat state and prepare for new session
     _messages.clear();
     _messageIndex.clear();
-    _currentSessionId = null;
     
     // Cancel any existing event subscription
     _eventSubscription?.cancel();
@@ -284,8 +300,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     AddUserMessage event,
     Emitter<ChatState> emit,
   ) {
-    _addUserMessage(event.sessionId, event.content);
-    _emitCurrentState(emit);
+    final currentSessionId = sessionBloc.currentSessionId;
+    if (currentSessionId != null) {
+      _addUserMessage(currentSessionId, event.content);
+      _emitCurrentState(emit);
+    }
   }
 
   void _updateOrAddMessage(OpenCodeMessage message) {
@@ -384,7 +403,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           // Create a new streaming message
           final newMessage = OpenCodeMessage(
             id: messageId,
-            sessionId: sseEvent.sessionId ?? _currentSessionId ?? '',
+            sessionId: sseEvent.sessionId ?? sessionBloc.currentSessionId ?? '',
             role: 'assistant',
             created: DateTime.now(),
             parts: [
@@ -429,7 +448,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   void _handleSessionAborted(String sessionId) {
-    if (sessionId == _currentSessionId) {
+    if (sessionId == sessionBloc.currentSessionId) {
       print('🔍 [ChatBloc] Session aborted - stopping streaming');
 
       // Mark the last message as completed if it was streaming
@@ -503,14 +522,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             _messages.last.isStreaming);
 
     return ChatReady(
-      sessionId: _currentSessionId!,
+      sessionId: sessionBloc.currentSessionId!,
       messages: List.from(_messages),
       isStreaming: streaming,
     );
   }
 
   void _emitCurrentState(Emitter<ChatState> emit) {
-    if (_currentSessionId != null) {
+    if (sessionBloc.currentSessionId != null) {
       emit(_createChatReadyState());
     }
   }
@@ -519,6 +538,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   Future<void> close() {
     _eventSubscription?.cancel();
     _sessionSubscription?.cancel();
+    _permanentSessionSubscription?.cancel();
     return super.close();
   }
 }

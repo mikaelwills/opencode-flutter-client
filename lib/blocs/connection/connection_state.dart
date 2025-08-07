@@ -9,13 +9,8 @@ abstract class ConnectionState extends Equatable {
 
 class ConnectionInitial extends ConnectionState {}
 
-class ConnectedWithSession extends ConnectionState {
-  final String sessionId;
-
-  const ConnectedWithSession({required this.sessionId});
-
-  @override
-  List<Object> get props => [sessionId];
+class Connected extends ConnectionState {
+  const Connected();
 }
 
 class Disconnected extends ConnectionState {

@@ -16,12 +16,16 @@ class ConfigCubit extends Cubit<ConfigState> {
       final prefs = await SharedPreferences.getInstance();
       final savedIP = prefs.getString('server_ip') ?? _defaultServerIp;
       final port = prefs.getInt('server_port') ?? _defaultPort;
+      final selectedProviderID = prefs.getString('selected_provider_id');
+      final selectedModelID = prefs.getString('selected_model_id');
       final baseUrl = 'http://$savedIP:$port';
 
       emit(ConfigLoaded(
         baseUrl: baseUrl,
         serverIp: savedIP,
         port: port,
+        selectedProviderID: selectedProviderID,
+        selectedModelID: selectedModelID,
       ));
     } catch (e) {
       emit(ConfigError('Failed to initialize config: ${e.toString()}'));
@@ -33,7 +37,8 @@ class ConfigCubit extends Cubit<ConfigState> {
     try {
       final currentState = state;
       if (currentState is! ConfigLoaded) {
-        emit(const ConfigError('Cannot update server when config is not loaded'));
+        emit(const ConfigError(
+            'Cannot update server when config is not loaded'));
         return;
       }
 
@@ -49,6 +54,8 @@ class ConfigCubit extends Cubit<ConfigState> {
         baseUrl: newBaseUrl,
         serverIp: serverIp,
         port: newPort,
+        selectedProviderID: currentState.selectedProviderID,
+        selectedModelID: currentState.selectedModelID,
       ));
     } catch (e) {
       emit(ConfigError('Failed to update server: ${e.toString()}'));
@@ -61,6 +68,8 @@ class ConfigCubit extends Cubit<ConfigState> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('server_ip');
       await prefs.remove('server_port');
+      await prefs.remove('selected_provider_id');
+      await prefs.remove('selected_model_id');
 
       const baseUrl = 'http://$_defaultServerIp:$_defaultPort';
 
@@ -68,9 +77,35 @@ class ConfigCubit extends Cubit<ConfigState> {
         baseUrl: baseUrl,
         serverIp: _defaultServerIp,
         port: _defaultPort,
+        selectedProviderID: null,
+        selectedModelID: null,
       ));
     } catch (e) {
       emit(ConfigError('Failed to reset config: ${e.toString()}'));
+    }
+  }
+
+  /// Update the selected provider and model
+  Future<void> updateProvider(String providerID, String modelID) async {
+    try {
+      final currentState = state;
+      if (currentState is! ConfigLoaded) {
+        emit(const ConfigError(
+            'Cannot update provider when config is not loaded'));
+        return;
+      }
+
+      // Save to SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('selected_provider_id', providerID);
+      await prefs.setString('selected_model_id', modelID);
+
+      emit(currentState.copyWith(
+        selectedProviderID: providerID,
+        selectedModelID: modelID,
+      ));
+    } catch (e) {
+      emit(ConfigError('Failed to update provider: ${e.toString()}'));
     }
   }
 
@@ -130,4 +165,3 @@ class ConfigCubit extends Cubit<ConfigState> {
     'Accept': 'application/json',
   };
 }
-

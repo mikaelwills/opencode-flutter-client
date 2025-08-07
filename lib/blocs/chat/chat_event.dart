@@ -8,15 +8,7 @@ abstract class ChatEvent extends Equatable {
   List<Object> get props => [];
 }
 
-class StartChat extends ChatEvent {
-  final String sessionId;
-  final String? initialMessage;
-
-  const StartChat({required this.sessionId, this.initialMessage});
-
-  @override
-  List<Object> get props => [sessionId, initialMessage ?? ''];
-}
+class LoadMessagesForCurrentSession extends ChatEvent {}
 
 class SendChatMessage extends ChatEvent {
   final String message;
@@ -28,15 +20,6 @@ class SendChatMessage extends ChatEvent {
 }
 
 class CancelCurrentOperation extends ChatEvent {}
-
-class ChatSessionChanged extends ChatEvent {
-  final String sessionId;
-
-  const ChatSessionChanged(this.sessionId);
-
-  @override
-  List<Object> get props => [sessionId];
-}
 
 // SSE-related events (merged from MessageBloc)
 class SSEEventReceived extends ChatEvent {
@@ -62,14 +45,10 @@ class ClearMessages extends ChatEvent {}
 class ClearChat extends ChatEvent {}
 
 class AddUserMessage extends ChatEvent {
-  final String sessionId;
   final String content;
 
-  const AddUserMessage({
-    required this.sessionId,
-    required this.content,
-  });
+  const AddUserMessage(this.content);
 
   @override
-  List<Object> get props => [sessionId, content];
+  List<Object> get props => [content];
 }

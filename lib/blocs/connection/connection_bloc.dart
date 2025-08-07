@@ -84,7 +84,7 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionState> {
   void _scheduleNextPing() {
     _pingTimer?.cancel();
     
-    if (state is! ConnectedWithSession) {
+    if (state is! Connected) {
       return; // Don't ping if not connected
     }
     
@@ -94,7 +94,7 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionState> {
     final interval = isIdle ? _idlePingInterval : _activePingInterval;
     
     _pingTimer = Timer(interval, () {
-      if (state is ConnectedWithSession) {
+      if (state is Connected) {
         add(CheckConnection());
         _scheduleNextPing(); // Schedule next ping
       }
@@ -122,7 +122,7 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionState> {
           .timeout(timeout);
       
       if (isReachable) {
-        if (state is! ConnectedWithSession) {
+        if (state is! Connected) {
           print('🔍 [Connection] Ping successful - connection established');
           await _handleConnectionEstablished(emit);
         } else {
@@ -175,7 +175,7 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionState> {
       
       _sessionSubscription = sessionBloc.stream.listen((sessionState) {
         if (sessionState is session_states.SessionLoaded) {
-          emit(ConnectedWithSession(sessionId: sessionState.session.id));
+          emit(const Connected());
           _scheduleNextPing(); // Start adaptive pinging once we have a session
           _sessionSubscription?.cancel();
           if (!sessionCompleter.isCompleted) {

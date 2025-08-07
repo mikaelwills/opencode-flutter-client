@@ -18,15 +18,6 @@ class DeleteSession extends SessionListEvent {
   List<Object> get props => [sessionId];
 }
 
-class SelectSession extends SessionListEvent {
-  final String sessionId;
-
-  const SelectSession(this.sessionId);
-
-  @override
-  List<Object> get props => [sessionId];
-}
-
 class RefreshSessions extends SessionListEvent {}
 
 class UpdateSessionSummary extends SessionListEvent {

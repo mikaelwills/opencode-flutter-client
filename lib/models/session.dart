@@ -31,7 +31,13 @@ class Session extends Equatable {
       String title = json['title'] as String;
       
       // Clean up generic titles but keep meaningful ones
-      if (title.startsWith('New Session -')) {
+      if (title.startsWith('New Session -') ||
+          (title.startsWith('Session ') && title.length < 50) ||
+          title == 'Starting a new conversation' ||
+          title == 'Starting new conversation' ||
+          (title.length < 10 && 
+           (title.toLowerCase().contains('session') || 
+            title.toLowerCase().contains('chat')))) {
         description = ''; // Keep empty for generic sessions
       } else {
         description = title;

@@ -14,23 +14,19 @@ class SessionListLoading extends SessionListState {}
 
 class SessionListLoaded extends SessionListState {
   final List<Session> sessions;
-  final String? selectedSessionId;
 
   const SessionListLoaded({
     required this.sessions,
-    this.selectedSessionId,
   });
 
   @override
-  List<Object?> get props => [sessions, selectedSessionId];
+  List<Object?> get props => [sessions];
 
   SessionListLoaded copyWith({
     List<Session>? sessions,
-    String? selectedSessionId,
   }) {
     return SessionListLoaded(
       sessions: sessions ?? this.sessions,
-      selectedSessionId: selectedSessionId ?? this.selectedSessionId,
     );
   }
 }

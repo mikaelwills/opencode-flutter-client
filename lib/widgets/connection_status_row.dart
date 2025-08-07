@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import 'package:opencode_flutter_client/blocs/chat/chat_bloc.dart';
 import 'package:opencode_flutter_client/blocs/chat/chat_state.dart';
 import '../theme/opencode_theme.dart';
@@ -65,19 +66,19 @@ class _ConnectionStatusRowState extends State<ConnectionStatusRow>
             final networkIcon = networkStatus?.icon ?? '';
             
             String statusText;
-            if (connectionState is connection_states.ConnectedWithSession) {
-              statusText = '${networkIcon} Connected to $ipText';
+            if (connectionState is connection_states.Connected) {
+              statusText = '$networkIcon Connected to $ipText';
             } else if (connectionState is connection_states.Reconnecting) {
-              statusText = '${networkIcon} Reconnecting to $ipText...';
+              statusText = '$networkIcon Reconnecting to $ipText...';
             } else if (connectionState is connection_states.Disconnected) {
               final isIntentional = connectionState.isIntentional;
               if (isIntentional) {
-                statusText = '${networkIcon} Manually disconnected';
+                statusText = '$networkIcon Manually disconnected';
               } else {
-                statusText = '${networkIcon} Disconnected from $ipText';
+                statusText = '$networkIcon Disconnected from $ipText';
               }
             } else {
-              statusText = '${networkIcon} Disconnected from $ipText';
+              statusText = '$networkIcon Disconnected from $ipText';
             }
             return Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -94,12 +95,15 @@ class _ConnectionStatusRowState extends State<ConnectionStatusRow>
                     return Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          displayText,
-                          style: OpenCodeTextStyles.terminal.copyWith(
-                            fontSize: 11,
-                            color: OpenCodeTheme.textSecondary,
-                            fontWeight: FontWeight.w400,
+                        GestureDetector(
+                          onTap: () => context.go('/provider-list'),
+                          child: Text(
+                            displayText,
+                            style: OpenCodeTextStyles.terminal.copyWith(
+                              fontSize: 11,
+                              color: OpenCodeTheme.textSecondary,
+                              fontWeight: FontWeight.w400,
+                            ),
                           ),
                         ),
                         if (isWorking) ...[
@@ -145,7 +149,7 @@ class _ConnectionStatusRowState extends State<ConnectionStatusRow>
     Color color;
     bool shouldPulse = false;
 
-    if (state is connection_states.ConnectedWithSession) {
+    if (state is connection_states.Connected) {
       color = OpenCodeTheme.success;
       shouldPulse = true;
     } else if (state is connection_states.Reconnecting) {
