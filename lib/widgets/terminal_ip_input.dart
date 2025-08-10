@@ -18,6 +18,7 @@ class TerminalIPInput extends StatelessWidget {
   final String? portHint;
   final bool isConnecting;
   final double? maxWidth;
+  final bool tappableForEdit;
 
   const TerminalIPInput.editable({
     super.key,
@@ -30,6 +31,7 @@ class TerminalIPInput extends StatelessWidget {
     this.maxWidth = 300,
   })  : mode = TerminalIPInputMode.editable,
         instance = null,
+        tappableForEdit = false,
         onEdit = null;
 
   const TerminalIPInput.instance({
@@ -39,6 +41,7 @@ class TerminalIPInput extends StatelessWidget {
     this.onEdit,
     this.isConnecting = false,
     this.maxWidth,
+    this.tappableForEdit = false,
   })  : mode = TerminalIPInputMode.instance,
         ipController = null,
         portController = null,
@@ -47,11 +50,13 @@ class TerminalIPInput extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool showEditButton = mode == TerminalIPInputMode.instance && onEdit != null && !tappableForEdit;
+
     return Container(
       constraints: maxWidth != null ? BoxConstraints(maxWidth: maxWidth!) : null,
       child: Row(
         children: [
-          if (mode == TerminalIPInputMode.instance && onEdit != null) ...[
+          if (showEditButton) ...[
             _buildEditButton(),
             const SizedBox(width: 12),
           ],
@@ -100,7 +105,15 @@ class TerminalIPInput extends StatelessWidget {
 
   Widget _buildInputContent() {
     if (mode == TerminalIPInputMode.instance && instance != null) {
-      return _buildInstanceDisplay();
+      final instanceDisplay = _buildInstanceDisplay();
+      if (tappableForEdit) {
+        return GestureDetector(
+          onTap: onEdit,
+          behavior: HitTestBehavior.opaque, // Ensure the whole area is tappable
+          child: instanceDisplay,
+        );
+      }
+      return instanceDisplay;
     }
     return _buildEditableFields();
   }

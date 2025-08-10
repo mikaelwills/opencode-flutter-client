@@ -134,7 +134,7 @@ class NavBar extends StatelessWidget {
                     ),
                     const SizedBox(width: 12),
                     Flexible(
-                      flex: 3,
+                      flex: 10,
                       child: TextFormField(
                         controller: ipController,
                         style: const TextStyle(
@@ -175,7 +175,7 @@ class NavBar extends StatelessWidget {
                       ),
                     ),
                     Flexible(
-                      flex: 1,
+                      flex: 4,
                       child: TextFormField(
                         controller: portController,
                         style: const TextStyle(

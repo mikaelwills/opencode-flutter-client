@@ -365,10 +365,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 child: TerminalIPInput.instance(
                                   instance: instance,
                                   onConnect: () => _connectToInstance(instance),
-                                  onEdit: () => _showEditInstanceDialog(
-                                      context, instance),
+                                  onEdit: () => _showEditInstanceDialog(context, instance),
                                   isConnecting: isDeleting,
                                   maxWidth: double.infinity,
+                                  tappableForEdit: true, // Enable tap-to-edit
                                 ),
                               );
                             },
