@@ -15,7 +15,7 @@ import '../models/opencode_instance.dart';
 import '../services/sse_service.dart';
 import '../widgets/terminal_button.dart';
 import '../widgets/terminal_ip_input.dart';
-import 'package:dartssh2/dartssh2.dart';
+
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -28,7 +28,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late TextEditingController _ipController;
   late TextEditingController _portController;
   bool _isLoading = true;
-  bool _isRestarting = false;
+
   String _originalIP = '';
   int _originalPort = 4096;
 
@@ -43,9 +43,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     // Fallback timeout in case SharedPreferences hangs
     Future.delayed(const Duration(seconds: 3), () {
       if (mounted && _isLoading) {
-        _ipController.text = '192.168.1.161';
+        _ipController.text = 'localhost';
         _portController.text = '4096';
-        _originalIP = '192.168.1.161';
+        _originalIP = 'localhost';
         _originalPort = 4096;
         setState(() {
           _isLoading = false;
@@ -66,7 +66,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final configCubit = context.read<ConfigCubit>();
       final currentState = configCubit.state;
 
-      String savedIP = '192.168.1.161';
+      String savedIP = 'localhost';
       int savedPort = 4096;
 
       if (currentState is ConfigLoaded) {
@@ -75,7 +75,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       } else {
         // Fallback to SharedPreferences if cubit state is not loaded
         final prefs = await SharedPreferences.getInstance();
-        savedIP = prefs.getString('server_ip') ?? '192.168.1.161';
+        savedIP = prefs.getString('server_ip') ?? 'localhost';
         savedPort = prefs.getInt('server_port') ?? 4096;
       }
 
@@ -92,9 +92,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       print('Error loading IP and port: $e');
       // Fallback to default values if loading fails
       if (mounted) {
-        _ipController.text = '192.168.1.161';
+        _ipController.text = 'localhost';
         _portController.text = '4096';
-        _originalIP = '192.168.1.161';
+        _originalIP = 'localhost';
         _originalPort = 4096;
         setState(() {
           _isLoading = false;
@@ -209,92 +209,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _restartServer() async {
-    // Show confirmation dialog
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: OpenCodeTheme.surface,
-        title: const Text(
-          'Restart Server',
-          style: TextStyle(color: OpenCodeTheme.text),
-        ),
-        content: const Text(
-          'This will restart the OpenCode server. Continue?',
-          style: TextStyle(color: OpenCodeTheme.textSecondary),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text(
-              'Cancel',
-              style: TextStyle(color: OpenCodeTheme.textSecondary),
-            ),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text(
-              'Restart',
-              style: TextStyle(color: OpenCodeTheme.primary),
-            ),
-          ),
-        ],
-      ),
-    );
 
-    if (confirmed != true) return;
-
-    setState(() {
-      _isRestarting = true;
-    });
-
-    try {
-      final currentIP = _ipController.text.trim();
-      if (currentIP.isEmpty) {
-        throw Exception('IP address is required');
-      }
-
-      // Create SSH client
-      final socket = await SSHSocket.connect(currentIP, 22);
-      final client = SSHClient(
-        socket,
-        username: 'mikael',
-        onPasswordRequest: () => '', // Password-less auth (key-based)
-      );
-
-      // Execute restart script
-      client.execute('~/restart-opencode.sh');
-
-      client.close();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Server restarted successfully'),
-            backgroundColor: OpenCodeTheme.success,
-          ),
-        );
-
-        // Trigger connection check after restart
-        context.read<ConnectionBloc>().add(CheckConnection());
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to restart server: $e'),
-            backgroundColor: OpenCodeTheme.error,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isRestarting = false;
-        });
-      }
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -387,16 +302,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           },
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: TerminalButton(
-                          command: 'restart_server',
-                          type: TerminalButtonType.neutral,
-                          isLoading: _isRestarting,
-                          loadingText: 'restarting',
-                          onPressed: _isRestarting ? null : _restartServer,
-                        ),
-                      ),
+
                     ],
                   ),
                   const SizedBox(height: 32),

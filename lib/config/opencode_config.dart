@@ -9,7 +9,7 @@ class OpenCodeConfig {
   static ConfigCubit? _configCubit;
   
   // Fallback values for when cubit is not available
-  static String _fallbackBaseUrl = 'http://192.168.1.161:4096';
+  static String _fallbackBaseUrl = 'http://localhost:4096';
   
   /// Set the ConfigCubit instance for this class to use
   static void setConfigCubit(ConfigCubit cubit) {
@@ -44,10 +44,10 @@ class OpenCodeConfig {
       // Fallback behavior
       try {
         final prefs = await SharedPreferences.getInstance();
-        final savedIP = prefs.getString('server_ip') ?? '192.168.1.161';
+        final savedIP = prefs.getString('server_ip') ?? 'localhost';
         _fallbackBaseUrl = 'http://$savedIP:4096';
       } catch (e) {
-        _fallbackBaseUrl = 'http://192.168.1.161:4096'; // fallback
+        _fallbackBaseUrl = 'http://localhost:4096'; // fallback
       }
     }
   }

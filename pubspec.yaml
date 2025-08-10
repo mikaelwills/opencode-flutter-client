@@ -46,7 +46,7 @@ dependencies:
   connectivity_plus: ^6.1.0 # Network connectivity monitoring
   equatable: ^2.0.5 # Value equality for BLoC states
   shared_preferences: ^2.2.2 # Persistent storage for settings
-  dartssh2: ^2.9.0 # SSH client for server management
+
   go_router: ^14.2.7 # Declarative routing
   uuid: ^4.5.1 # UUID generation for instances
 
