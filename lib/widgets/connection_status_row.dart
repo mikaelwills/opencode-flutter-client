@@ -95,16 +95,20 @@ class _ConnectionStatusRowState extends State<ConnectionStatusRow>
                     return Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        GestureDetector(
-                          onTap: () => context.go('/provider-list'),
-                          child: Text(
-                            displayText,
-                            style: OpenCodeTextStyles.terminal.copyWith(
-                              fontSize: 11,
-                              color: OpenCodeTheme.textSecondary,
-                              fontWeight: FontWeight.w400,
+                        Row(
+                          children: [
+                            GestureDetector(
+                              onTap: () => context.go('/provider-list'),
+                              child: Text(
+                                displayText,
+                                style: OpenCodeTextStyles.terminal.copyWith(
+                                  fontSize: 11,
+                                  color: OpenCodeTheme.textSecondary,
+                                  fontWeight: FontWeight.w400,
+                                ),
+                              ),
                             ),
-                          ),
+                          ],
                         ),
                         if (isWorking) ...[
                           const SizedBox(width: 8),

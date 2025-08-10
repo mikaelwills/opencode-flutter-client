@@ -3,13 +3,19 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:go_router/go_router.dart';
 import '../theme/opencode_theme.dart';
+import '../blocs/chat/chat_bloc.dart';
 import '../blocs/connection/connection_bloc.dart';
 import '../blocs/connection/connection_state.dart' as connection_states;
 import '../blocs/connection/connection_event.dart';
-import '../blocs/chat/chat_bloc.dart';
 import '../blocs/chat/chat_state.dart';
 import '../blocs/config/config_cubit.dart';
 import '../blocs/config/config_state.dart';
+import '../blocs/instance/instance_bloc.dart';
+import '../blocs/instance/instance_event.dart';
+import '../blocs/instance/instance_state.dart';
+import '../models/opencode_instance.dart';
+import '../services/sse_service.dart';
+import '../widgets/terminal_ip_input.dart';
 import 'chat_screen.dart';
 
 class ConnectScreen extends StatefulWidget {
@@ -30,6 +36,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
   void initState() {
     super.initState();
     _loadSavedIP();
+    context.read<InstanceBloc>().add(LoadInstances());
   }
 
   @override
@@ -101,8 +108,19 @@ class _ConnectScreenState extends State<ConnectScreen> {
 
       // Trigger connection check
       if (mounted) {
+        // Restart SSE service to connect to new server
+        final sseService = context.read<SSEService>();
+        sseService.restartConnection();
+        
+        // Restart ChatBloc SSE subscription to new server
+        final chatBloc = context.read<ChatBloc>();
+        chatBloc.restartSSESubscription();
+        
         context.read<ConnectionBloc>().add(ResetConnection());
         context.read<ConnectionBloc>().add(CheckConnection());
+        
+        // Show save instance option after successful connection setup
+        _showSaveInstanceOption();
       }
     } catch (e) {
       if (mounted) {
@@ -198,147 +216,60 @@ class _ConnectScreenState extends State<ConnectScreen> {
   Widget _buildIPInputUI() {
     return Column(
       children: [
-        Container(
-          constraints: const BoxConstraints(maxWidth: 300),
-          height: 56,
-          decoration: const BoxDecoration(
-            border: Border(
-              left: BorderSide(
-                color: OpenCodeTheme.primary,
-                width: 2,
-              ),
-              right: BorderSide(
-                color: OpenCodeTheme.primary,
-                width: 2,
-              ),
-            ),
-          ),
-          padding: const EdgeInsets.only(left: 12, right: 12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              const Text(
-                '❯',
-                style: TextStyle(
-                  fontFamily: 'FiraCode',
-                  fontSize: 14,
-                  color: OpenCodeTheme.primary,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(width: 12),
+        // Show recent instances for quick access
+        BlocBuilder<InstanceBloc, InstanceState>(
+          builder: (context, instanceState) {
+            if (instanceState is InstancesLoaded && instanceState.instances.isNotEmpty) {
+              // Show up to 3 most recent instances
+              final recentInstances = instanceState.instances.take(3).toList();
               
-              // IP Address input field
-              Flexible(
-                flex: 3,
-                child: TextField(
-                  controller: _ipController,
-                  style: const TextStyle(
-                    fontFamily: 'FiraCode',
-                    fontSize: 14,
-                    color: OpenCodeTheme.text,
-                    height: 1.4,
-                  ),
-                  decoration: const InputDecoration(
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    focusedBorder: InputBorder.none,
-                    disabledBorder: InputBorder.none,
-                    errorBorder: InputBorder.none,
-                    focusedErrorBorder: InputBorder.none,
-                    contentPadding: EdgeInsets.zero,
-                    isDense: true,
-                    filled: false,
-                    hintText: 'IP Address',
-                    hintStyle: TextStyle(
-                      color: OpenCodeTheme.textSecondary,
+              return Column(
+                children: [
+                  ...recentInstances.map((instance) => Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    constraints: const BoxConstraints(maxWidth: 300),
+                    child: TerminalIPInput.instance(
+                      instance: instance,
+                      onConnect: () => _connectToInstanceFromConnect(instance),
+                      maxWidth: 300,
                     ),
-                  ),
-                  maxLines: 1,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  textInputAction: TextInputAction.next,
-                ),
-              ),
-              
-              // Colon separator
-              const Text(
-                ':',
-                style: TextStyle(
-                  fontFamily: 'FiraCode',
-                  fontSize: 14,
-                  color: OpenCodeTheme.text,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              
-              // Port input field
-              Flexible(
-                flex: 1,
-                child: TextField(
-                  controller: _portController,
-                  style: const TextStyle(
-                    fontFamily: 'FiraCode',
-                    fontSize: 14,
-                    color: OpenCodeTheme.text,
-                    height: 1.4,
-                  ),
-                  decoration: const InputDecoration(
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    focusedBorder: InputBorder.none,
-                    disabledBorder: InputBorder.none,
-                    errorBorder: InputBorder.none,
-                    focusedErrorBorder: InputBorder.none,
-                    contentPadding: EdgeInsets.zero,
-                    isDense: true,
-                    filled: false,
-                    hintText: 'Port',
-                    hintStyle: TextStyle(
-                      color: OpenCodeTheme.textSecondary,
-                    ),
-                  ),
-                  maxLines: 1,
-                  keyboardType: TextInputType.number,
-                  textInputAction: TextInputAction.done,
-                  onSubmitted: (_) => _connectToIP(),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        Container(
-          constraints: const BoxConstraints(maxWidth: 300),
-          width: double.infinity,
-          height: 48,
-          child: ElevatedButton(
-            onPressed: _isConnecting ? null : _connectToIP,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF1A1A1A),
-              foregroundColor: OpenCodeTheme.primary,
-              elevation: 0,
-              side: const BorderSide(
-                color: OpenCodeTheme.primary,
-                width: 1,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(6),
-              ),
-            ),
-            child: _isConnecting
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        OpenCodeTheme.primary,
+                  )),
+                  if (instanceState.instances.length > 3) 
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(
+                        'and ${instanceState.instances.length - 3} more in settings...',
+                        style: TextStyle(
+                          color: OpenCodeTheme.text.withOpacity(0.6),
+                          fontSize: 12,
+                        ),
                       ),
                     ),
-                  )
-                : const Text('Connect'),
-          ),
+                  const Divider(
+                    color: OpenCodeTheme.textSecondary,
+                    height: 32,
+                  ),
+                  Text(
+                    'Or connect manually:',
+                    style: TextStyle(
+                      color: OpenCodeTheme.text.withOpacity(0.8),
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+              );
+            }
+            return const SizedBox.shrink();
+          },
+        ),
+        // Manual connection input
+        TerminalIPInput.editable(
+          ipController: _ipController,
+          portController: _portController,
+          onConnect: _connectToIP,
+          isConnecting: _isConnecting,
+          maxWidth: 300,
         ),
       ],
     );
@@ -370,5 +301,183 @@ class _ConnectScreenState extends State<ConnectScreen> {
       return connectionState.reason ?? 'Connecting to server...';
     }
     return 'Connecting to server...';
+  }
+
+
+  Future<void> _connectToInstanceFromConnect(OpenCodeInstance instance) async {
+    try {
+      // Update the UI fields first
+      setState(() {
+        _ipController.text = instance.ip;
+        _portController.text = instance.port;
+        _savedIP = instance.ip;
+        _savedPort = int.tryParse(instance.port);
+      });
+
+      // Update last used timestamp
+      context.read<InstanceBloc>().add(UpdateLastUsed(instance.id));
+      
+      // Connect using the existing method
+      await _connectToIP();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to connect to instance: $e'),
+            backgroundColor: OpenCodeTheme.error,
+          ),
+        );
+      }
+    }
+  }
+
+  void _showSaveInstanceOption() {
+    // Check if this IP/port combination already exists as an instance
+    final currentState = context.read<InstanceBloc>().state;
+    if (currentState is InstancesLoaded) {
+      final existingInstance = currentState.instances.firstWhere(
+        (instance) => instance.ip == _savedIP && instance.port == _savedPort.toString(),
+        orElse: () => OpenCodeInstance(
+          id: '',
+          name: '',
+          ip: '',
+          port: '',
+          createdAt: DateTime.now(),
+          lastUsed: DateTime.now(),
+        ),
+      );
+      
+      // Don't show save option if this instance already exists
+      if (existingInstance.id.isNotEmpty) {
+        return;
+      }
+    }
+
+    // Show save option with a small delay to not interrupt the connection flow
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Save this connection as an instance for quick access?'),
+            backgroundColor: OpenCodeTheme.primary,
+            action: SnackBarAction(
+              label: 'Save',
+              textColor: OpenCodeTheme.background,
+              onPressed: _showSaveInstanceDialog,
+            ),
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    });
+  }
+
+  void _showSaveInstanceDialog() {
+    final nameController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    // Auto-suggest a name based on IP
+    final suggestedName = _savedIP != null ? 'OpenCode $_savedIP' : 'OpenCode Instance';
+    nameController.text = suggestedName;
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: OpenCodeTheme.surface,
+        title: const Text(
+          'Save Instance',
+          style: TextStyle(color: OpenCodeTheme.text),
+        ),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Save "$_savedIP:$_savedPort" as an instance for quick access.',
+                style: TextStyle(
+                  color: OpenCodeTheme.text.withOpacity(0.7),
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: nameController,
+                style: const TextStyle(color: OpenCodeTheme.text),
+                decoration: const InputDecoration(
+                  labelText: 'Instance Name',
+                  labelStyle: TextStyle(color: OpenCodeTheme.textSecondary),
+                  enabledBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(color: OpenCodeTheme.textSecondary),
+                  ),
+                  focusedBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(color: OpenCodeTheme.primary),
+                  ),
+                ),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Name is required';
+                  }
+                  return null;
+                },
+                autofocus: true,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: OpenCodeTheme.textSecondary),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              if (formKey.currentState?.validate() ?? false) {
+                _saveCurrentAsInstance(nameController.text.trim());
+                Navigator.of(dialogContext).pop();
+              }
+            },
+            child: const Text(
+              'Save',
+              style: TextStyle(color: OpenCodeTheme.primary),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _saveCurrentAsInstance(String name) {
+    if (_savedIP == null || _savedPort == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No connection details to save'),
+          backgroundColor: OpenCodeTheme.error,
+        ),
+      );
+      return;
+    }
+
+    final now = DateTime.now();
+    final instance = OpenCodeInstance(
+      id: '', // Will be generated by the bloc
+      name: name,
+      ip: _savedIP!,
+      port: _savedPort.toString(),
+      createdAt: now,
+      lastUsed: now,
+    );
+
+    context.read<InstanceBloc>().add(AddInstance(instance));
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Saved "$name" as an instance'),
+        backgroundColor: OpenCodeTheme.success,
+      ),
+    );
   }
 }

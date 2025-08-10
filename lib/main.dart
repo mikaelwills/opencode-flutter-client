@@ -12,6 +12,7 @@ import 'blocs/session_list/session_list_bloc.dart';
 import 'blocs/chat/chat_bloc.dart';
 import 'blocs/config/config_cubit.dart';
 import 'blocs/config/config_state.dart';
+import 'blocs/instance/instance_bloc.dart';
 import 'router/app_router.dart';
 import 'config/opencode_config.dart';
 
@@ -89,6 +90,9 @@ class OpenCodeApp extends StatelessWidget {
               sseService: context.read<SSEService>(),
               openCodeClient: context.read<OpenCodeClient>(),
             ),
+          ),
+          BlocProvider<InstanceBloc>(
+            create: (context) => InstanceBloc(),
           ),
         ],
         child: Container(

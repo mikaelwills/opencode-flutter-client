@@ -175,24 +175,23 @@ class _TerminalButtonState extends State<TerminalButton>
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       if (widget.isLoading) ...[
                         _buildSpinner(),
                         const SizedBox(width: 8),
                       ],
                       
-                      Flexible(
-                        child: Text(
-                          _displayText,
-                          style: TextStyle(
-                            fontFamily: 'FiraCode',
-                            fontSize: 14,
-                            color: _textColor,
-                            fontWeight: FontWeight.w500,
-                            letterSpacing: 0.5,
-                          ),
-                          overflow: TextOverflow.ellipsis,
+                      Text(
+                        _displayText,
+                        style: TextStyle(
+                          fontFamily: 'FiraCode',
+                          fontSize: 14,
+                          color: _textColor,
+                          fontWeight: FontWeight.w500,
+                          letterSpacing: 0.5,
                         ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),

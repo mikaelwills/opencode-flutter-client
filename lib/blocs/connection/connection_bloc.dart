@@ -165,9 +165,18 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionState> {
       _fastReconnectAttempt = 0;
       _cancelReconnectTimer();
 
-      // Connection is established - let SessionBloc handle session creation
+      // Connection is established - handle session appropriately
       print('🔍 [Connection] Connection established');
-      sessionBloc.add(session_events.CreateSession());
+      
+      if (sessionBloc.currentSession != null) {
+        // Reconnection scenario - validate existing session
+        print('🔄 [Connection] Reconnection detected, validating existing session: ${sessionBloc.currentSession!.id}');
+        sessionBloc.add(session_events.ValidateSession(sessionBloc.currentSession!.id));
+      } else {
+        // Initial connection - load stored session (validates or creates new)
+        print('🆕 [Connection] Initial connection, loading stored session');
+        sessionBloc.add(session_events.LoadStoredSession());
+      }
       
       // Listen for session creation to get the session ID with timeout
       _sessionSubscription?.cancel();

@@ -83,9 +83,14 @@ class _PromptFieldState extends State<PromptField> {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               // Terminal prompt symbol
-              const Text(
-                OpenCodeSymbols.prompt,
-                style: OpenCodeTextStyles.prompt,
+              const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    OpenCodeSymbols.prompt,
+                    style: OpenCodeTextStyles.prompt,
+                  ),
+                ],
               ),
               const SizedBox(width: 12),
 

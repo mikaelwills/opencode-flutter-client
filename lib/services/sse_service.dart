@@ -101,6 +101,30 @@ class SSEService {
   }
 
   bool get isConnected => _isConnected;
+  
+  bool get isActive => _eventController != null && !_eventController!.isClosed;
+  
+  /// Restart the SSE connection with fresh URL from config
+  /// This properly cleans up the old connection and establishes a new one
+  void restartConnection() {
+    print('🔄 [SSEService] Restarting SSE connection...');
+    
+    // Clean up existing connection
+    _reconnectTimer?.cancel();
+    _subscription?.cancel();
+    
+    // Close existing stream controller if it exists
+    if (_eventController != null && !_eventController!.isClosed) {
+      _eventController!.close();
+    }
+    
+    // Reset connection state
+    _isConnected = false;
+    _reconnectAttempts = 0;
+    _eventController = null;
+    
+    print('🔄 [SSEService] Old connection cleaned up, establishing new connection...');
+  }
 
   // Fast path for text streaming - optimized for message.part.updated events
   OpenCodeEvent? _tryFastTextExtraction(String rawData) {

@@ -136,6 +136,7 @@ class ConfigCubit extends Cubit<ConfigState> {
     return _defaultPort;
   }
 
+
   // Static endpoints (unchanged)
   static const String sseEndpoint = '/event';
   static const String sessionEndpoint = '/session';

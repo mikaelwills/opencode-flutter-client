@@ -534,6 +534,30 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
   }
 
+  /// Restart SSE event subscription - used when SSE service reconnects to new server
+  void restartSSESubscription() {
+    print('🔄 [ChatBloc] Restarting SSE subscription...');
+    
+    // Cancel existing subscription
+    _eventSubscription?.cancel();
+    
+    // Reestablish SSE event subscription
+    _eventSubscription = sseService.connectToEventStream().listen(
+      (sseEvent) {
+        // Only process events for the current session
+        if (sseEvent.sessionId == sessionBloc.currentSessionId) {
+          add(SSEEventReceived(sseEvent));
+        }
+      },
+      onError: (error) {
+        print('❌ [ChatBloc] SSE stream error after restart: $error');
+        add(SSEErrorOccurred('SSE stream error: ${error.toString()}'));
+      },
+    );
+    
+    print('✅ [ChatBloc] SSE subscription restarted successfully');
+  }
+
   @override
   Future<void> close() {
     _eventSubscription?.cancel();

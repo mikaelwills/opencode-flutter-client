@@ -9,6 +9,7 @@ import '../blocs/session/session_bloc.dart';
 import '../blocs/session/session_event.dart';
 import '../blocs/session/session_state.dart';
 import '../models/session.dart';
+import '../widgets/terminal_button.dart';
 
 class SessionsScreen extends StatefulWidget {
   const SessionsScreen({super.key});
@@ -123,23 +124,40 @@ class _SessionsScreenState extends State<SessionsScreen> {
                 builder: (context, sessionState) {
                   final currentSessionId = context.read<SessionBloc>().currentSessionId;
                   
-                  return ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: state.sessions.length,
-                    itemBuilder: (context, index) {
-                      final session = state.sessions[index];
-                      final isDeleting = state is SessionDeleting && 
-                          (state as SessionDeleting).deletingSessionId == session.id;
-                      final isCurrentSession = session.id == currentSessionId;
+                  return Column(
+                    children: [
+                      Expanded(
+                        child: ListView.builder(
+                          padding: const EdgeInsets.all(16),
+                          itemCount: state.sessions.length,
+                          itemBuilder: (context, index) {
+                            final session = state.sessions[index];
+                            final isDeleting = state is SessionDeleting && 
+                                (state as SessionDeleting).deletingSessionId == session.id;
+                            final isCurrentSession = session.id == currentSessionId;
 
-                      return SessionCard(
-                        session: session,
-                        isDeleting: isDeleting,
-                        isCurrentSession: isCurrentSession,
-                        onTap: () => _selectSession(context, session),
-                        onDelete: () => _showDeleteConfirmation(context, session),
-                      );
-                    },
+                            return SessionCard(
+                              session: session,
+                              isDeleting: isDeleting,
+                              isCurrentSession: isCurrentSession,
+                              onTap: () => _selectSession(context, session),
+                              onDelete: () => _showDeleteConfirmation(context, session),
+                            );
+                          },
+                        ),
+                      ),
+                      if (state.sessions.isNotEmpty) ...[
+                        Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: TerminalButton(
+                            command: 'delete_all_sessions',
+                            type: TerminalButtonType.danger,
+                            width: double.infinity,
+                            onPressed: _deleteAllSessions,
+                          ),
+                        ),
+                      ],
+                    ],
                   );
                 }
               ),
@@ -230,6 +248,74 @@ class _SessionsScreenState extends State<SessionsScreen> {
       },
     );
   }
+
+  Future<void> _deleteAllSessions() async {
+    // Capture context-dependent values before async operations
+    final currentSessionId = context.read<SessionBloc>().currentSessionId;
+    
+    final sessionListBloc = context.read<SessionListBloc>();
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: OpenCodeTheme.surface,
+        title: const Text(
+          'Delete All Sessions',
+          style: TextStyle(color: OpenCodeTheme.text),
+        ),
+        content: const Text(
+          'This will permanently delete all sessions and cannot be undone. Are you sure?',
+          style: TextStyle(color: OpenCodeTheme.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: OpenCodeTheme.textSecondary),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text(
+              'Delete All',
+              style: TextStyle(color: OpenCodeTheme.error),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      // Trigger delete all sessions event with exclusion
+      sessionListBloc.add(DeleteAllSessions(excludeSessionId: currentSessionId));
+      
+      if (mounted) {
+        final message = currentSessionId != null
+            ? 'Deleting all sessions except the active one...'
+            : 'Deleting all sessions...';
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: OpenCodeTheme.warning,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+            content: Text('Failed to delete all sessions: $e'),
+            backgroundColor: OpenCodeTheme.error,
+          ),
+        );
+      }
+    }
+  }
 }
 
 class SessionCard extends StatelessWidget {
@@ -291,14 +377,6 @@ class SessionCard extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        if (isCurrentSession) ...[
-                          const SizedBox(width: 8),
-                          const Icon(
-                            Icons.radio_button_checked,
-                            size: 16,
-                            color: OpenCodeTheme.primary,
-                          ),
-                        ],
                       ],
                     ),
                     const SizedBox(height: 8),

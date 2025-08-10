@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import '../theme/opencode_theme.dart';
 import '../models/opencode_message.dart';
 import '../models/message_part.dart';
@@ -101,10 +102,45 @@ class TerminalMessage extends StatelessWidget {
               text: part.content!,
               style: OpenCodeTextStyles.terminal,
               isStreaming: true,
+              useMarkdown: true,
             )
-          : Text(
-              part.content!,
-              style: OpenCodeTextStyles.terminal,
+          : MarkdownBody(
+              data: part.content!,
+              styleSheet: MarkdownStyleSheet(
+                p: OpenCodeTextStyles.terminal,
+                code: OpenCodeTextStyles.code,
+                codeblockDecoration: BoxDecoration(
+                  color: OpenCodeTheme.surface,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                codeblockPadding: const EdgeInsets.all(8),
+                blockquote: OpenCodeTextStyles.terminal.copyWith(
+                  color: OpenCodeTheme.textSecondary,
+                ),
+                blockquoteDecoration: const BoxDecoration(
+                  border: Border(
+                    left: BorderSide(
+                      color: OpenCodeTheme.textSecondary,
+                      width: 2,
+                    ),
+                  ),
+                ),
+                h1: OpenCodeTextStyles.terminal.copyWith(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+                h2: OpenCodeTextStyles.terminal.copyWith(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+                h3: OpenCodeTextStyles.terminal.copyWith(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+                listBullet: OpenCodeTextStyles.terminal,
+                listIndent: 16,
+              ),
+              selectable: true,
             ),
     );
   }
