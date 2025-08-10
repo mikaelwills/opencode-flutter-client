@@ -19,10 +19,10 @@ An **unofficial** Flutter mobile client for [OpenCode](https://opencode.ai) - an
 ## Screenshots
 
 <div align="center">
-  <img src="flutter_01.png" width="200" alt="Chat Interface" />
-  <img src="flutter_02.png" width="200" alt="Settings Screen" />
-  <img src="flutter_03.png" width="200" alt="Provider Selection" />
-  <img src="flutter_04.png" width="200" alt="Session Management" />
+  <img src="chat-screen.PNG" width="200" alt="Chat Screen" />
+  <img src="manage-instances.PNG" width="200" alt="Settings / Instance management" />
+  <img src="add-instance.PNG" width="200" alt="Adding an opencode instance" />
+  <img src="session-management.PNG" width="200" alt="Session Management" />
 </div>
 
 ## Prerequisites
