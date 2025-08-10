@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 📖 Documentation
+    url: https://opencode.ai/docs
+    about: Check the documentation for setup and usage guides
+  - name: 💬 Discussions
+    url: https://github.com/mikaelwills/opencode-flutter-client/discussions
+    about: Ask questions and discuss ideas with the community
+  - name: 🌐 OpenCode Website
+    url: https://opencode.ai
+    about: Visit the main OpenCode website for more information

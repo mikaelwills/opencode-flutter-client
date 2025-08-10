@@ -1,5 +1,8 @@
 name: opencode_flutter_client
-description: "A new Flutter project."
+description: "Flutter mobile client for OpenCode - an AI-powered coding assistant that runs locally."
+homepage: https://github.com/mikaelwills/opencode-flutter-client
+repository: https://github.com/mikaelwills/opencode-flutter-client
+issue_tracker: https://github.com/mikaelwills/opencode-flutter-client/issues
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: "none" # Remove this line if you wish to publish to pub.dev

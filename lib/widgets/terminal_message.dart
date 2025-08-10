@@ -4,6 +4,7 @@ import '../theme/opencode_theme.dart';
 import '../models/opencode_message.dart';
 import '../models/message_part.dart';
 import '../utils/text_sanitizer.dart';
+import '../utils/tool_display_helper.dart';
 import 'streaming_text.dart';
 
 class TerminalMessage extends StatelessWidget {
@@ -47,7 +48,7 @@ class TerminalMessage extends StatelessWidget {
       ),
       padding: const EdgeInsets.only(left: 12, top: 8, bottom: 12),
       child: Text(
-        TextSanitizer.sanitize(content, preserveMarkdown: false),
+        _safeTextSanitize(content, preserveMarkdown: false),
         style: OpenCodeTextStyles.terminal,
       ),
     );
@@ -100,13 +101,13 @@ class TerminalMessage extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 4),
       child: shouldStream
           ? StreamingText(
-              text: TextSanitizer.sanitize(part.content!, preserveMarkdown: true),
+              text: _safeTextSanitize(part.content!, preserveMarkdown: true),
               style: OpenCodeTextStyles.terminal,
               isStreaming: true,
               useMarkdown: true,
             )
           : MarkdownBody(
-              data: TextSanitizer.sanitize(part.content!, preserveMarkdown: true),
+              data: _safeTextSanitize(part.content!, preserveMarkdown: true),
               styleSheet: MarkdownStyleSheet(
                 p: OpenCodeTextStyles.terminal,
                 code: OpenCodeTextStyles.code,
@@ -147,12 +148,12 @@ class TerminalMessage extends StatelessWidget {
   }
 
   Widget _buildToolPart(MessagePart part) {
-    final toolName = _getToolDisplayName(part);
+    final toolName = ToolDisplayHelper.getDisplayName(part);
     
     return Padding(
       padding: const EdgeInsets.only(left: 16, bottom: 2),
       child: Text(
-        TextSanitizer.sanitize(toolName, preserveMarkdown: false),
+        _safeTextSanitize(toolName, preserveMarkdown: false),
         style: OpenCodeTextStyles.terminal.copyWith(
           color: OpenCodeTheme.textSecondary,
           fontSize: 12,
@@ -161,84 +162,7 @@ class TerminalMessage extends StatelessWidget {
     );
   }
   
-  String _getToolDisplayName(MessagePart part) {
-    // Try multiple metadata fields for tool name
-    final metadata = part.metadata ?? {};
-    
-    // Primary tool name sources - based on actual SSE data structure
-    String? toolName = metadata['tool'] as String? ??
-                      metadata['name'] as String? ?? 
-                      metadata['tool_name'] as String? ??
-                      metadata['function_name'] as String?;
-    
-    // If no name found, try to extract from other metadata
-    if (toolName == null || toolName.isEmpty) {
-      // Default fallback
-      return 'tool';
-    }
-    
-    // Extract additional context from state.input if available
-    final state = metadata['state'] as Map<String, dynamic>?;
-    final input = state?['input'] as Map<String, dynamic>?;
-    
-    if (input != null) {
-      // For file operations, show the file path
-      final filePath = input['path'] as String? ?? input['filePath'] as String?;
-      if (filePath != null) {
-        final fileName = filePath.split('/').last;
-        final cleanToolName = _formatToolName(toolName);
-        return '$cleanToolName $fileName';
-      }
-      
-      // For bash commands, show command
-      final command = input['command'] as String?;
-      if (command != null) {
-        final commandName = command.split(' ').first;
-        return 'bash $commandName';
-      }
-      
-      // For grep/search operations
-      final pattern = input['pattern'] as String?;
-      if (pattern != null) {
-        return 'search "$pattern"';
-      }
-    }
-    
-    // Clean up the tool name for better display
-    return _formatToolName(toolName);
-  }
-  
-  String _formatToolName(String toolName) {
-    // Convert common tool names to more readable format
-    switch (toolName.toLowerCase()) {
-      case 'read':
-        return 'read';
-      case 'write':
-        return 'write';
-      case 'bash':
-        return 'bash';
-      case 'grep':
-        return 'search';
-      case 'list':
-        return 'list';
-      case 'glob':
-        return 'find';
-      case 'obsidian-server_view':
-        return 'view';
-      case 'obsidian-server_str_replace':
-        return 'edit';
-      case 'obsidian-server_create':
-        return 'create';
-      case 'storage.write':
-        return 'write';
-      default:
-        // Remove prefixes and clean up tool names
-        if (toolName.contains('_')) {
-          return toolName.split('_').last;
-        }
-        return toolName;
-    }
-  }
+
 
   Widget _buildStepStartPart(MessagePart part) {
     // Hide step start messages
@@ -250,5 +174,14 @@ class TerminalMessage extends StatelessWidget {
     return const SizedBox.shrink();
   }
 
+  /// Safe text sanitization with fallback handling
+  String _safeTextSanitize(String text, {bool preserveMarkdown = true}) {
+    try {
+      return TextSanitizer.sanitize(text, preserveMarkdown: preserveMarkdown);
+    } catch (e) {
+      print('⚠️ [TerminalMessage] Text sanitization failed, using ASCII fallback: $e');
+      return TextSanitizer.sanitizeToAscii(text);
+    }
+  }
 
 }

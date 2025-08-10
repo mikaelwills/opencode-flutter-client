@@ -26,16 +26,20 @@ class StreamingText extends StatefulWidget {
 
 class _StreamingTextState extends State<StreamingText> {
   String _displayedText = '';
+  String _sanitizedFullText = '';
   Timer? _timer;
   int _currentIndex = 0;
 
   @override
   void initState() {
     super.initState();
+    // Sanitize the full text once at initialization
+    _sanitizedFullText = _safeTextSanitize(widget.text, preserveMarkdown: widget.useMarkdown);
+    
     if (widget.isStreaming) {
       _startStreaming();
     } else {
-      _displayedText = TextSanitizer.sanitize(widget.text, preserveMarkdown: widget.useMarkdown);
+      _displayedText = _sanitizedFullText;
     }
   }
 
@@ -44,27 +48,30 @@ class _StreamingTextState extends State<StreamingText> {
     super.didUpdateWidget(oldWidget);
     
     if (widget.text != oldWidget.text) {
+      // Re-sanitize the full text when it changes
+      _sanitizedFullText = _safeTextSanitize(widget.text, preserveMarkdown: widget.useMarkdown);
+      
       _timer?.cancel();
       if (widget.isStreaming) {
         // If text changed and we're streaming, continue from current position
-        if (widget.text.startsWith(_displayedText)) {
+        if (_sanitizedFullText.startsWith(_displayedText)) {
           _currentIndex = _displayedText.length;
           _startStreaming();
         } else {
-          // Text completely changed, restart
-          _displayedText = '';
+          // Text completely changed, restart streaming
           _currentIndex = 0;
+          _displayedText = '';
           _startStreaming();
         }
       } else {
-        _displayedText = widget.text;
+        _displayedText = _sanitizedFullText;
       }
     } else if (widget.isStreaming != oldWidget.isStreaming) {
       if (widget.isStreaming) {
         _startStreaming();
       } else {
         _timer?.cancel();
-        _displayedText = widget.text;
+        _displayedText = _sanitizedFullText;
       }
     }
   }
@@ -76,16 +83,13 @@ class _StreamingTextState extends State<StreamingText> {
   }
 
   void _startStreaming() {
-    if (_currentIndex >= widget.text.length) return;
-    
+    _timer?.cancel();
     _timer = Timer.periodic(widget.delay, (timer) {
-      if (_currentIndex < widget.text.length) {
+      if (_currentIndex < _sanitizedFullText.length) {
         setState(() {
           _currentIndex++;
-          _displayedText = TextSanitizer.sanitize(
-            widget.text.substring(0, _currentIndex), 
-            preserveMarkdown: widget.useMarkdown
-          );
+          // Use the pre-sanitized text, just substring it
+          _displayedText = _sanitizedFullText.substring(0, _currentIndex);
         });
       } else {
         timer.cancel();
@@ -139,7 +143,7 @@ class _StreamingTextState extends State<StreamingText> {
             ),
             selectable: true,
           ),
-          if (widget.isStreaming && _currentIndex < widget.text.length)
+          if (widget.isStreaming && _currentIndex < _sanitizedFullText.length)
             Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Text(
@@ -157,10 +161,10 @@ class _StreamingTextState extends State<StreamingText> {
       text: TextSpan(
         children: [
           TextSpan(
-            text: TextSanitizer.sanitize(_displayedText, preserveMarkdown: false),
+            text: _displayedText, // Already sanitized, no need to sanitize again
             style: widget.style,
           ),
-          if (widget.isStreaming && _currentIndex < widget.text.length)
+          if (widget.isStreaming && _currentIndex < _sanitizedFullText.length)
             TextSpan(
               text: '▊',
               style: widget.style?.copyWith(
@@ -170,5 +174,15 @@ class _StreamingTextState extends State<StreamingText> {
         ],
       ),
     );
+  }
+
+  /// Safe text sanitization with fallback handling
+  String _safeTextSanitize(String text, {bool preserveMarkdown = true}) {
+    try {
+      return TextSanitizer.sanitize(text, preserveMarkdown: preserveMarkdown);
+    } catch (e) {
+      print('⚠️ [StreamingText] Text sanitization failed, using ASCII fallback: $e');
+      return TextSanitizer.sanitizeToAscii(text);
+    }
   }
 }

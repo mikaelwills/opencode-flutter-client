@@ -385,7 +385,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               // Look for existing tool parts - if no name, just check if any tool part exists
               final existingToolIndex = toolName != null 
                 ? updatedParts.indexWhere((p) => 
-                    p.type == 'tool' && p.metadata?['name'] == toolName)
+                    p.type == 'tool' && p.metadata?['tool'] == toolName)
                 : updatedParts.indexWhere((p) => p.type == 'tool');
               
               if (existingToolIndex != -1) {
