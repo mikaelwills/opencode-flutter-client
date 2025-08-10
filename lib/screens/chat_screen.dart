@@ -81,51 +81,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<SessionBloc, SessionState>(
-      builder: (context, sessionState) {
-        // Show loading while waiting for session to load
-        if (sessionState is SessionLoading || sessionState is SessionInitial || sessionState is SessionValidating) {
-          return const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                CircularProgressIndicator(color: OpenCodeTheme.primary),
-                SizedBox(height: 16),
-                Text(
-                  'Loading session...',
-                  style: TextStyle(color: OpenCodeTheme.textSecondary),
-                ),
-              ],
-            ),
-          );
-        }
-        
-        // Show error if session failed to load
-        if (sessionState is SessionError) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(
-                  Icons.error_outline,
-                  size: 48,
-                  color: OpenCodeTheme.error,
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Session Error: ${sessionState.message}',
-                  style: const TextStyle(
-                    color: OpenCodeTheme.error,
-                    fontSize: 14,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          );
-        }
-
-        return Stack(
+    return Stack(
         children: [
           Column(
             children: [
@@ -236,9 +192,11 @@ class _ChatScreenState extends State<ChatScreen> {
                       );
                     }
 
+                    // Show empty state instead of loading indicator
                     return const Center(
-                      child: CircularProgressIndicator(
-                        color: OpenCodeTheme.primary,
+                      child: Text(
+                        'Connecting to chat...',
+                        style: TextStyle(color: OpenCodeTheme.textSecondary),
                       ),
                     );
                   },
@@ -298,7 +256,5 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
         ],
       );
-    },
-    );
   }
 }
