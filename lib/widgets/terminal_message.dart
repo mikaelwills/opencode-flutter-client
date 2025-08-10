@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import '../blocs/chat/chat_bloc.dart';
+import '../blocs/chat/chat_event.dart';
 import '../theme/opencode_theme.dart';
 import '../models/opencode_message.dart';
 import '../models/message_part.dart';
@@ -22,7 +25,7 @@ class TerminalMessage extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (message.role == 'user') _buildUserMessage(),
+        if (message.role == 'user') _buildUserMessage(context),
         if (message.role == 'assistant') ...[
           const SizedBox(height: 16),
           _buildAssistantMessage(),
@@ -32,25 +35,34 @@ class TerminalMessage extends StatelessWidget {
     );
   }
 
-  Widget _buildUserMessage() {
+  Widget _buildUserMessage(BuildContext context) {
     final content = message.parts.isNotEmpty && message.parts.first.content != null
         ? message.parts.first.content!
         : '';
-    
-    return Container(
-      decoration: const BoxDecoration(
-        border: Border(
-          left: BorderSide(
-            color: Color(0xFF444444),
-            width: 2,
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Container(
+            decoration: const BoxDecoration(
+              border: Border(
+                left: BorderSide(
+                  color: Color(0xFF444444),
+                  width: 2,
+                ),
+              ),
+            ),
+            padding: const EdgeInsets.only(left: 12, top: 8, bottom: 12),
+            child: Text(
+              _safeTextSanitize(content, preserveMarkdown: false),
+              style: OpenCodeTextStyles.terminal,
+            ),
           ),
         ),
-      ),
-      padding: const EdgeInsets.only(left: 12, top: 8, bottom: 12),
-      child: Text(
-        _safeTextSanitize(content, preserveMarkdown: false),
-        style: OpenCodeTextStyles.terminal,
-      ),
+        if (message.sendStatus == MessageSendStatus.failed)
+          _buildStatusIcon(context),
+      ],
     );
   }
 
@@ -184,4 +196,27 @@ class TerminalMessage extends StatelessWidget {
     }
   }
 
+  Widget _buildStatusIcon(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 12, top: 4),
+      child: Tooltip(
+        message: 'Failed to send. Tap to retry.',
+        child: InkWell(
+          onTap: () {
+            final content = message.parts.isNotEmpty ? message.parts.first.content : null;
+            if (content != null) {
+              // Resend the message by adding a new SendChatMessage event.
+              context.read<ChatBloc>().add(SendChatMessage(content));
+            }
+          },
+          borderRadius: BorderRadius.circular(20),
+          child: const Icon(
+            Icons.sync_problem,
+            color: OpenCodeTheme.error,
+            size: 20,
+          ),
+        ),
+      ),
+    );
+  }
 }

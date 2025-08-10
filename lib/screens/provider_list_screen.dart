@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:go_router/go_router.dart';
+import '../utils/session_validator.dart';
 import '../theme/opencode_theme.dart';
 import '../models/provider.dart' as provider_models;
 import '../services/opencode_client.dart';
@@ -74,7 +74,7 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
       
       if (mounted) {
         // Navigate back to chat
-        context.go('/chat');
+        SessionValidator.navigateToChat(context);
       }
     } catch (e) {
       if (mounted) {
@@ -143,7 +143,7 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
             ),
             const SizedBox(height: 24),
             ElevatedButton(
-              onPressed: () => context.go('/chat'),
+              onPressed: () => SessionValidator.navigateToChat(context),
               style: ElevatedButton.styleFrom(
                 backgroundColor: OpenCodeTheme.primary,
                 foregroundColor: OpenCodeTheme.background,

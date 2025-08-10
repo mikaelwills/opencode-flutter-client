@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:go_router/go_router.dart';
+import '../utils/session_validator.dart';
 import '../theme/opencode_theme.dart';
 import '../blocs/connection/connection_bloc.dart';
 import '../blocs/connection/connection_state.dart' as connection_states;
@@ -115,7 +115,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       // Auto-navigate to ChatScreen when session is ready
                       if (connectionState is connection_states.Connected) {
                         print('🔍 [HomeScreen] Auto-navigating to ChatScreen - connection established');
-                        context.go('/chat');
+                        SessionValidator.navigateToChat(context);
                       }
                     },
                   ),

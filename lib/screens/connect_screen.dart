@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:go_router/go_router.dart';
+import '../utils/session_validator.dart';
 import '../theme/opencode_theme.dart';
 import '../blocs/chat/chat_bloc.dart';
 import '../blocs/connection/connection_bloc.dart';
@@ -163,7 +163,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
           listener: (context, connectionState) {
             // Auto-navigate to ChatScreen when session is ready
             if (connectionState is connection_states.Connected) {
-              context.go('/chat');
+              SessionValidator.navigateToChat(context);
             }
           },
         ),

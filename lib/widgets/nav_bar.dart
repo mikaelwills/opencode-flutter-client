@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import '../utils/session_validator.dart';
 import '../theme/opencode_theme.dart';
 import '../blocs/chat/chat_bloc.dart';
 import '../blocs/chat/chat_event.dart';
@@ -271,17 +272,17 @@ class NavBar extends StatelessWidget {
         children: [
           if (currentLocation == '/settings') ...[
             GestureDetector(
-                onTap: () => context.go("/chat"),
+                onTap: () => SessionValidator.navigateToChat(context),
                 child: const Icon(Icons.arrow_left, color: OpenCodeTheme.text)),
           ],
           if (currentLocation == '/sessions') ...[
             GestureDetector(
-                onTap: () => context.go("/chat"),
+                onTap: () => SessionValidator.navigateToChat(context),
                 child: const Icon(Icons.arrow_left, color: OpenCodeTheme.text)),
           ],
           if (currentLocation == '/provider-list') ...[
             GestureDetector(
-                onTap: () => context.go("/chat"),
+                onTap: () => SessionValidator.navigateToChat(context),
                 child: const Icon(Icons.arrow_left, color: OpenCodeTheme.text)),
           ],
           if (currentLocation == '/chat') ...[

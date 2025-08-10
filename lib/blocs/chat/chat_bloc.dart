@@ -33,7 +33,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<SendChatMessage>(_onSendChatMessage);
     on<CancelCurrentOperation>(_onCancelCurrentOperation);
     on<SSEEventReceived>(_onSSEEventReceived);
-    on<SSEErrorOccurred>(_onSSEErrorOccurred);
     on<ClearMessages>(_onClearMessages);
     on<ClearChat>(_onClearChat);
     on<AddUserMessage>(_onAddUserMessage);
@@ -53,7 +52,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final currentSessionId = sessionBloc.currentSessionId;
     
     if (currentSessionId == null) {
-      emit(const ChatError('No current session available'));
+      // Silently return, as the SessionBloc listener in ChatScreen will handle navigation.
       return;
     }
 
@@ -85,7 +84,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       
     } catch (e) {
       print('❌ [ChatBloc] Failed to load messages for current session: $e');
-      emit(ChatError('Failed to load messages: ${e.toString()}'));
+      emit(const ChatError('Failed to load messages. Please try again.'));
     }
   }
 
@@ -106,8 +105,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         }
       },
       onError: (error) {
+        // Errors are now handled by the ConnectionBloc and displayed in the ConnectionStatusRow.
+        // This avoids showing a full-screen error and breaking the chat UI.
         print('❌ [ChatBloc] SSE stream error: $error');
-        add(SSEErrorOccurred('SSE stream error: ${error.toString()}'));
       },
     );
   }
@@ -118,7 +118,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ) async {
     final currentState = state;
     if (currentState is! ChatReady) {
-      emit(const ChatError('Chat not ready'));
+      // Silently return, chat is not in a state to send messages.
       return;
     }
 
@@ -145,7 +145,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _sessionSubscription?.cancel();
       _sessionSubscription = sessionBloc.stream.listen((sessionState) {
         if (sessionState is SessionLoaded) {
-          // Return to ready state after message is sent
+          // On success, update the message status to sent
+          _updateMessageStatus(event.message, MessageSendStatus.sent);
           final actuallyStreaming = _messages.isNotEmpty &&
               _messages.last.role == 'assistant' &&
               _messages.last.isStreaming;
@@ -153,12 +154,18 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           emit(_createChatReadyState(isStreaming: actuallyStreaming));
           _sessionSubscription?.cancel();
         } else if (sessionState is SessionError) {
-          emit(ChatError(sessionState.message));
+          // On failure, update the message status to failed
+          _updateMessageStatus(event.message, MessageSendStatus.failed);
+          print('Error sending message: ${sessionState.message}');
+          emit(_createChatReadyState()); // Emit ready state to allow retry
           _sessionSubscription?.cancel();
         }
       });
     } catch (e) {
-      emit(ChatError('Failed to send message: ${e.toString()}'));
+      // On failure, update the message status to failed
+      _updateMessageStatus(event.message, MessageSendStatus.failed);
+      print('Failed to send message: ${e.toString()}');
+      emit(_createChatReadyState()); // Emit ready state to allow retry
     }
   }
 
@@ -168,7 +175,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       final existingUserMessages = _messages.where((msg) =>
           msg.role == 'user' &&
           msg.parts.isNotEmpty &&
-          msg.parts.first.content == content);
+          msg.parts.first.content == content &&
+          msg.sendStatus != MessageSendStatus.failed); // Don't skip failed messages that are being retried
 
       if (existingUserMessages.isNotEmpty) {
         print(
@@ -188,6 +196,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             content: content,
           ),
         ],
+        sendStatus: MessageSendStatus.sent, // Default to sent
       );
 
       _messages.add(userMessage);
@@ -239,7 +248,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             _emitCurrentState(emit);
           } catch (e) {
             print('❌ [ChatBloc] Failed to parse message update: $e');
-            emit(ChatError('Failed to parse message update: ${e.toString()}'));
+            // Don't emit an error state, just log it.
           }
         }
         break;
@@ -259,14 +268,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       default:
       // print('🔍 [ChatBloc] Unknown event type: ${sseEvent.type}');
     }
-  }
-
-  void _onSSEErrorOccurred(
-    SSEErrorOccurred event,
-    Emitter<ChatState> emit,
-  ) {
-    print('❌ [ChatBloc] SSE error occurred: ${event.error}');
-    emit(ChatError(event.error));
   }
 
   void _onClearMessages(
@@ -567,6 +568,22 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
   }
 
+  void _updateMessageStatus(String content, MessageSendStatus status) {
+    // Find the last user message with matching content that isn't already marked as failed.
+    // This prevents updating the wrong message if the user retries a failed message.
+    final index = _messages.lastIndexWhere((msg) =>
+        msg.role == 'user' &&
+        msg.parts.isNotEmpty &&
+        msg.parts.first.content == content &&
+        msg.sendStatus != MessageSendStatus.failed);
+
+    if (index != -1) {
+      final originalMessage = _messages[index];
+      _messages[index] = originalMessage.copyWith(sendStatus: status);
+      print('🔄 [ChatBloc] Updated message status to $status for: "$content"');
+    }
+  }
+
   /// Restart SSE event subscription - used when SSE service reconnects to new server
   void restartSSESubscription() {
     print('🔄 [ChatBloc] Restarting SSE subscription...');
@@ -583,8 +600,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         }
       },
       onError: (error) {
+        // Errors are now handled by the ConnectionBloc and displayed in the ConnectionStatusRow.
         print('❌ [ChatBloc] SSE stream error after restart: $error');
-        add(SSEErrorOccurred('SSE stream error: ${error.toString()}'));
       },
     );
     

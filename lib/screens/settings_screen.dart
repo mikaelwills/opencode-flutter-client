@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:go_router/go_router.dart';
+import '../utils/session_validator.dart';
 import '../theme/opencode_theme.dart';
 import '../blocs/chat/chat_bloc.dart';
 import '../blocs/config/config_cubit.dart';
@@ -129,7 +130,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     // Check if IP and port haven't changed
     if (newIP == _originalIP && newPort == _originalPort) {
-      context.go('/chat');
+      SessionValidator.navigateToChat(context);
       return;
     }
 
@@ -155,7 +156,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             backgroundColor: OpenCodeTheme.success,
           ),
         );
-        context.go('/chat');
+        SessionValidator.navigateToChat(context);
       }
     } catch (e) {
       if (mounted) {
@@ -417,7 +418,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         context.read<ConnectionBloc>().add(CheckConnection());
 
         // Navigate to chat screen
-        context.go('/chat');
+        SessionValidator.navigateToChat(context);
       }
     } catch (e) {
       if (mounted) {

@@ -13,6 +13,7 @@
 2. Run `flutter analyze` to check for errors
 3. Fix any analysis warnings or errors
 4. **DO NOT** attempt to run or build the app
+5. **DO NOT** commit changes automatically - user will test first
 
 ### Allowed Flutter Commands
 - ✅ `flutter analyze` - Check for code issues
@@ -28,11 +29,13 @@
 - Follow Dart/Flutter best practices
 - Maintain existing code style and patterns
 
-### Testing
+### Testing & Commits
 - User will handle all manual testing
 - Focus on static analysis and code correctness
 - Ensure changes compile without errors
 - No need to verify runtime behavior
+- **NEVER commit changes automatically** - user needs to test functionality first
+- Only commit when explicitly requested after user testing
 
 ## Project-Specific Notes
 - This is a Flutter mobile client for OpenCode

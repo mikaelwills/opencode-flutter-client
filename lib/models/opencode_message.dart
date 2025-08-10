@@ -1,6 +1,14 @@
 import 'package:equatable/equatable.dart';
 import 'message_part.dart';
 
+/// Enum to track the sending status of a user-authored message.
+enum MessageSendStatus {
+  // Message has been successfully sent and acknowledged by the server.
+  sent,
+  // The message failed to send and can be retried.
+  failed,
+}
+
 class OpenCodeMessage extends Equatable {
   final String id;
   final String sessionId;
@@ -9,6 +17,7 @@ class OpenCodeMessage extends Equatable {
   final DateTime? completed;
   final List<MessagePart> parts;
   final bool isStreaming;
+  final MessageSendStatus? sendStatus; // Nullable, only for user messages
 
   const OpenCodeMessage({
     required this.id,
@@ -18,6 +27,7 @@ class OpenCodeMessage extends Equatable {
     this.completed,
     required this.parts,
     this.isStreaming = false,
+    this.sendStatus,
   });
 
   factory OpenCodeMessage.fromJson(Map<String, dynamic> json) {
@@ -173,6 +183,7 @@ class OpenCodeMessage extends Equatable {
       'completed': completed?.toIso8601String(),
       'parts': parts.map((part) => part.toJson()).toList(),
       'isStreaming': isStreaming,
+      'sendStatus': sendStatus?.toString(), // Add sendStatus to JSON
     };
   }
 
@@ -184,6 +195,7 @@ class OpenCodeMessage extends Equatable {
     DateTime? completed,
     List<MessagePart>? parts,
     bool? isStreaming,
+    MessageSendStatus? sendStatus,
   }) {
     return OpenCodeMessage(
       id: id ?? this.id,
@@ -193,9 +205,10 @@ class OpenCodeMessage extends Equatable {
       completed: completed ?? this.completed,
       parts: parts ?? this.parts,
       isStreaming: isStreaming ?? this.isStreaming,
+      sendStatus: sendStatus ?? this.sendStatus,
     );
   }
 
   @override
-  List<Object?> get props => [id, sessionId, role, created, completed, parts, isStreaming];
+  List<Object?> get props => [id, sessionId, role, created, completed, parts, isStreaming, sendStatus];
 }

@@ -31,15 +31,6 @@ class SSEEventReceived extends ChatEvent {
   List<Object> get props => [event];
 }
 
-class SSEErrorOccurred extends ChatEvent {
-  final String error;
-
-  const SSEErrorOccurred(this.error);
-
-  @override
-  List<Object> get props => [error];
-}
-
 class ClearMessages extends ChatEvent {}
 
 class ClearChat extends ChatEvent {}

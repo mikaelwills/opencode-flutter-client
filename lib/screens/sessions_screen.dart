@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:go_router/go_router.dart';
+import '../utils/session_validator.dart';
 import '../theme/opencode_theme.dart';
 import '../blocs/session_list/session_list_bloc.dart';
 import '../blocs/session_list/session_list_event.dart';
@@ -174,7 +174,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
     context.read<SessionBloc>().add(SetCurrentSession(session.id));
     
     // Navigate to chat screen
-    context.go('/chat');
+    SessionValidator.navigateToChat(context);
   }
 
   void _showDeleteConfirmation(BuildContext context, Session session) {

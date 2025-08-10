@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import '../theme/opencode_theme.dart';
 import '../blocs/chat/chat_bloc.dart';
 import '../blocs/chat/chat_event.dart';
@@ -81,7 +82,16 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
+    return BlocListener<SessionBloc, SessionState>(
+      listener: (context, state) {
+        // If the session is no longer valid (e.g., error, not found),
+        // redirect the user to the connect screen.
+        if (state is SessionError || state is SessionNotFound) {
+          // Use go router to navigate, ensuring the user can't go back to a broken chat screen.
+          context.go('/connect');
+        }
+      },
+      child: Stack(
         children: [
           Column(
             children: [
@@ -180,12 +190,19 @@ class _ChatScreenState extends State<ChatScreen> {
                             ),
                             const SizedBox(height: 16),
                             Text(
-                              'Error: ${state.error}',
+                              state.error,
                               style: const TextStyle(
                                 color: OpenCodeTheme.error,
                                 fontSize: 14,
                               ),
                               textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 16),
+                            ElevatedButton(
+                              onPressed: () {
+                                context.read<ChatBloc>().add(LoadMessagesForCurrentSession());
+                              },
+                              child: const Text('Retry'),
                             ),
                           ],
                         ),
@@ -255,6 +272,7 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         ),
         ],
-      );
+      ),
+    );
   }
 }
