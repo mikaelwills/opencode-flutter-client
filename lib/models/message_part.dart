@@ -41,9 +41,34 @@ class MessagePart extends Equatable {
       metadata['cost'] = json['cost'];
     }
     
-    // Only log important part types
+    // For tool parts, preserve all tool-related fields as metadata
     if (type == 'tool') {
-      print('🔧 Tool: ${metadata['name'] ?? 'unknown'}');
+      // Add tool name if present
+      if (json['tool'] != null) {
+        metadata['tool'] = json['tool'];
+      }
+      
+      // Add call ID if present
+      if (json['callID'] != null) {
+        metadata['callID'] = json['callID'];
+      }
+      
+      // Add state information if present
+      if (json['state'] != null) {
+        metadata['state'] = json['state'];
+      }
+      
+      // Add any other tool-specific fields
+      for (final field in ['name', 'status', 'input', 'output', 'args']) {
+        if (json.containsKey(field) && json[field] != null) {
+          metadata[field] = json[field];
+        }
+      }
+    }
+    
+    // Only log tool parts when they're actually created (reduce spam)
+    if (type == 'tool' && (metadata['tool'] != null || metadata['name'] != null)) {
+      print('🔧 Tool: ${metadata['tool'] ?? metadata['name']}');
     }
     
     return MessagePart(

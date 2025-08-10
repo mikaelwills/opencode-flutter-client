@@ -3,6 +3,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import '../theme/opencode_theme.dart';
 import '../models/opencode_message.dart';
 import '../models/message_part.dart';
+import '../utils/text_sanitizer.dart';
 import 'streaming_text.dart';
 
 class TerminalMessage extends StatelessWidget {
@@ -46,7 +47,7 @@ class TerminalMessage extends StatelessWidget {
       ),
       padding: const EdgeInsets.only(left: 12, top: 8, bottom: 12),
       child: Text(
-        content,
+        TextSanitizer.sanitize(content, preserveMarkdown: false),
         style: OpenCodeTextStyles.terminal,
       ),
     );
@@ -99,13 +100,13 @@ class TerminalMessage extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 4),
       child: shouldStream
           ? StreamingText(
-              text: part.content!,
+              text: TextSanitizer.sanitize(part.content!, preserveMarkdown: true),
               style: OpenCodeTextStyles.terminal,
               isStreaming: true,
               useMarkdown: true,
             )
           : MarkdownBody(
-              data: part.content!,
+              data: TextSanitizer.sanitize(part.content!, preserveMarkdown: true),
               styleSheet: MarkdownStyleSheet(
                 p: OpenCodeTextStyles.terminal,
                 code: OpenCodeTextStyles.code,
@@ -146,65 +147,97 @@ class TerminalMessage extends StatelessWidget {
   }
 
   Widget _buildToolPart(MessagePart part) {
-    print('🔧 [TerminalMessage] Building tool part with metadata: ${part.metadata}');
-    print('🔧 [TerminalMessage] Tool part content: ${part.content}');
-    
-    // Extract tool name from metadata
-    String toolName = part.metadata?['name'] as String? ?? 
-                      part.metadata?['tool_name'] as String? ??
-                      part.metadata?['function_name'] as String? ??
-                      'tool';
-    
-    // Convert storage.write to a more user-friendly name
-    if (toolName == 'storage.write') {
-      toolName = 'write_file';
-    }
-    
-    // Extract key parameter - prioritize common ones
-    String? keyParam;
-    final metadata = part.metadata;
-    if (metadata != null) {
-      // Try common parameter names
-      keyParam = metadata['file_path'] as String? ??
-                 metadata['path'] as String? ??
-                 metadata['command'] as String? ??
-                 metadata['url'] as String? ??
-                 metadata['key'] as String?;
-      
-      // If parameters object exists, try to extract from there
-      if (keyParam == null && metadata['parameters'] is Map<String, dynamic>) {
-        final params = metadata['parameters'] as Map<String, dynamic>;
-        keyParam = params['file_path'] as String? ??
-                   params['path'] as String? ??
-                   params['command'] as String? ??
-                   params['url'] as String? ??
-                   params['key'] as String?;
-      }
-      
-      // Check if content might contain useful info
-      if (keyParam == null && part.content != null && part.content!.isNotEmpty) {
-        // If content is short enough, use it as the parameter
-        if (part.content!.length < 100) {
-          keyParam = part.content;
-        }
-      }
-    }
-    
-    // Format the display text
-    final displayText = keyParam != null ? '$toolName: $keyParam' : toolName;
-    
-    print('🔧 [TerminalMessage] Final tool display text: "$displayText"');
+    final toolName = _getToolDisplayName(part);
     
     return Padding(
       padding: const EdgeInsets.only(left: 16, bottom: 2),
       child: Text(
-        displayText,
+        TextSanitizer.sanitize(toolName, preserveMarkdown: false),
         style: OpenCodeTextStyles.terminal.copyWith(
           color: OpenCodeTheme.textSecondary,
           fontSize: 12,
         ),
       ),
     );
+  }
+  
+  String _getToolDisplayName(MessagePart part) {
+    // Try multiple metadata fields for tool name
+    final metadata = part.metadata ?? {};
+    
+    // Primary tool name sources - based on actual SSE data structure
+    String? toolName = metadata['tool'] as String? ??
+                      metadata['name'] as String? ?? 
+                      metadata['tool_name'] as String? ??
+                      metadata['function_name'] as String?;
+    
+    // If no name found, try to extract from other metadata
+    if (toolName == null || toolName.isEmpty) {
+      // Default fallback
+      return 'tool';
+    }
+    
+    // Extract additional context from state.input if available
+    final state = metadata['state'] as Map<String, dynamic>?;
+    final input = state?['input'] as Map<String, dynamic>?;
+    
+    if (input != null) {
+      // For file operations, show the file path
+      final filePath = input['path'] as String? ?? input['filePath'] as String?;
+      if (filePath != null) {
+        final fileName = filePath.split('/').last;
+        final cleanToolName = _formatToolName(toolName);
+        return '$cleanToolName $fileName';
+      }
+      
+      // For bash commands, show command
+      final command = input['command'] as String?;
+      if (command != null) {
+        final commandName = command.split(' ').first;
+        return 'bash $commandName';
+      }
+      
+      // For grep/search operations
+      final pattern = input['pattern'] as String?;
+      if (pattern != null) {
+        return 'search "$pattern"';
+      }
+    }
+    
+    // Clean up the tool name for better display
+    return _formatToolName(toolName);
+  }
+  
+  String _formatToolName(String toolName) {
+    // Convert common tool names to more readable format
+    switch (toolName.toLowerCase()) {
+      case 'read':
+        return 'read';
+      case 'write':
+        return 'write';
+      case 'bash':
+        return 'bash';
+      case 'grep':
+        return 'search';
+      case 'list':
+        return 'list';
+      case 'glob':
+        return 'find';
+      case 'obsidian-server_view':
+        return 'view';
+      case 'obsidian-server_str_replace':
+        return 'edit';
+      case 'obsidian-server_create':
+        return 'create';
+      case 'storage.write':
+        return 'write';
+      default:
+        // Remove prefixes and clean up tool names
+        if (toolName.contains('_')) {
+          return toolName.split('_').last;
+        }
+        return toolName;
+    }
   }
 
   Widget _buildStepStartPart(MessagePart part) {

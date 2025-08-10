@@ -3,6 +3,7 @@ import 'package:flutter_highlight/flutter_highlight.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import '../theme/opencode_theme.dart';
 import '../models/message_part.dart';
+import '../utils/text_sanitizer.dart';
 
 class MessagePartWidget extends StatelessWidget {
   final MessagePart part;
@@ -54,7 +55,7 @@ class MessagePartWidget extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: MarkdownBody(
-        data: content,
+        data: TextSanitizer.sanitize(content, preserveMarkdown: true),
         styleSheet: MarkdownStyleSheet(
           p: OpenCodeTextStyles.terminal,
           code: OpenCodeTextStyles.code,
@@ -95,7 +96,7 @@ class MessagePartWidget extends StatelessWidget {
   }
 
   Widget _buildToolPart() {
-    final toolName = part.metadata?['name'] ?? 'Tool';
+    final toolName = _getToolDisplayName();
     final toolStatus = part.metadata?['status'] ?? 'running';
     final toolOutput = part.content ?? '';
 
@@ -124,7 +125,7 @@ class MessagePartWidget extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Text(
-                toolName,
+                TextSanitizer.sanitize(toolName, preserveMarkdown: false),
                 style: OpenCodeTextStyles.terminal.copyWith(
                   fontWeight: FontWeight.w600,
                   color: _getToolStatusColor(toolStatus),
@@ -150,11 +151,10 @@ class MessagePartWidget extends StatelessWidget {
                 color: OpenCodeTheme.background,
                 borderRadius: BorderRadius.circular(4),
               ),
-              child: SelectableText(
-                toolOutput,
-                style: OpenCodeTextStyles.code,
-              ),
-            ),
+               child: SelectableText(
+                 TextSanitizer.sanitize(toolOutput, preserveMarkdown: true),
+                 style: OpenCodeTextStyles.code,
+               ),            ),
           ],
         ],
       ),
@@ -289,6 +289,87 @@ class MessagePartWidget extends StatelessWidget {
       ),
     );
   }
+
+  String _getToolDisplayName() {
+    // Try multiple metadata fields for tool name
+    final metadata = part.metadata ?? {};
+    
+    // Primary tool name sources - based on actual SSE data structure
+    String? toolName = metadata['tool'] as String? ??
+                      metadata['name'] as String? ?? 
+                      metadata['tool_name'] as String? ??
+                      metadata['function_name'] as String?;
+    
+    // If no name found, try to extract from other metadata
+    if (toolName == null || toolName.isEmpty) {
+      // Default fallback
+      return 'tool';
+    }
+    
+    // Extract additional context from state.input if available
+    final state = metadata['state'] as Map<String, dynamic>?;
+    final input = state?['input'] as Map<String, dynamic>?;
+    
+    if (input != null) {
+      // For file operations, show the file path
+      final filePath = input['path'] as String? ?? input['filePath'] as String?;
+      if (filePath != null) {
+        final fileName = filePath.split('/').last;
+        final cleanToolName = _formatToolName(toolName);
+        return '$cleanToolName $fileName';
+      }
+      
+      // For bash commands, show command
+      final command = input['command'] as String?;
+      if (command != null) {
+        final commandName = command.split(' ').first;
+        return 'bash $commandName';
+      }
+      
+      // For grep/search operations
+      final pattern = input['pattern'] as String?;
+      if (pattern != null) {
+        return 'search "$pattern"';
+      }
+    }
+    
+    // Clean up the tool name for better display
+    return _formatToolName(toolName);
+  }
+  
+  String _formatToolName(String toolName) {
+    // Convert common tool names to more readable format
+    switch (toolName.toLowerCase()) {
+      case 'read':
+        return 'read';
+      case 'write':
+        return 'write';
+      case 'bash':
+        return 'bash';
+      case 'grep':
+        return 'search';
+      case 'list':
+        return 'list';
+      case 'glob':
+        return 'find';
+      case 'obsidian-server_view':
+        return 'view';
+      case 'obsidian-server_str_replace':
+        return 'edit';
+      case 'obsidian-server_create':
+        return 'create';
+      case 'storage.write':
+        return 'write';
+      default:
+        // Remove prefixes and clean up tool names
+        if (toolName.contains('_')) {
+          return toolName.split('_').last;
+        }
+        return toolName;
+    }
+  }
+
+
 
   Color _getToolStatusColor(String status) {
     switch (status.toLowerCase()) {

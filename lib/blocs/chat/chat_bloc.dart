@@ -374,16 +374,49 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               id: partId ?? updatedParts[partIndex].id,
               type: partType ?? updatedParts[partIndex].type,
               content: partText ?? updatedParts[partIndex].content,
-              metadata: partData['time'] as Map<String, dynamic>?,
+              metadata: partData,
             );
           } else {
-            // Add new part
-            updatedParts.add(MessagePart(
-              id: partId ?? DateTime.now().millisecondsSinceEpoch.toString(),
-              type: partType ?? 'text',
-              content: partText,
-              metadata: partData['time'] as Map<String, dynamic>?,
-            ));
+            // Special handling for tool parts to prevent spam
+            if (partType == 'tool') {
+              // Extract tool name from the 'tool' field (not 'name')
+              final toolName = partData['tool'] as String?;
+              
+              // Look for existing tool parts - if no name, just check if any tool part exists
+              final existingToolIndex = toolName != null 
+                ? updatedParts.indexWhere((p) => 
+                    p.type == 'tool' && p.metadata?['name'] == toolName)
+                : updatedParts.indexWhere((p) => p.type == 'tool');
+              
+              if (existingToolIndex != -1) {
+                // Update existing tool part instead of creating new one
+                updatedParts[existingToolIndex] = MessagePart(
+                  id: updatedParts[existingToolIndex].id,
+                  type: 'tool',
+                  content: partText ?? updatedParts[existingToolIndex].content,
+                  metadata: partData.isNotEmpty ? partData : updatedParts[existingToolIndex].metadata,
+                );
+                print('🔧 [ChatBloc] Updated existing tool part: ${toolName ?? 'unnamed'}');
+                return true; // Skip adding new part
+              } else {
+                // Add new tool part only if no duplicate exists
+                updatedParts.add(MessagePart(
+                  id: partId ?? DateTime.now().millisecondsSinceEpoch.toString(),
+                  type: 'tool',
+                  content: partText,
+                  metadata: partData,
+                ));
+                print('🔧 [ChatBloc] Added new tool part: ${toolName ?? 'unnamed'}');
+              }
+            } else {
+              // Add new non-tool part normally
+              updatedParts.add(MessagePart(
+                id: partId ?? DateTime.now().millisecondsSinceEpoch.toString(),
+                type: partType ?? 'text',
+                content: partText,
+                metadata: partData,
+              ));
+            }
           }
 
           // Create updated message with streaming flag

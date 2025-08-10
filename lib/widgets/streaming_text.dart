@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'dart:async';
 import '../theme/opencode_theme.dart';
+import '../utils/text_sanitizer.dart';
 
 class StreamingText extends StatefulWidget {
   final String text;
@@ -34,7 +35,7 @@ class _StreamingTextState extends State<StreamingText> {
     if (widget.isStreaming) {
       _startStreaming();
     } else {
-      _displayedText = widget.text;
+      _displayedText = TextSanitizer.sanitize(widget.text, preserveMarkdown: widget.useMarkdown);
     }
   }
 
@@ -81,13 +82,18 @@ class _StreamingTextState extends State<StreamingText> {
       if (_currentIndex < widget.text.length) {
         setState(() {
           _currentIndex++;
-          _displayedText = widget.text.substring(0, _currentIndex);
+          _displayedText = TextSanitizer.sanitize(
+            widget.text.substring(0, _currentIndex), 
+            preserveMarkdown: widget.useMarkdown
+          );
         });
       } else {
         timer.cancel();
       }
     });
   }
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -151,7 +157,7 @@ class _StreamingTextState extends State<StreamingText> {
       text: TextSpan(
         children: [
           TextSpan(
-            text: _displayedText,
+            text: TextSanitizer.sanitize(_displayedText, preserveMarkdown: false),
             style: widget.style,
           ),
           if (widget.isStreaming && _currentIndex < widget.text.length)
