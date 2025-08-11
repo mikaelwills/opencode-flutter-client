@@ -60,8 +60,8 @@ class TerminalMessage extends StatelessWidget {
             ),
           ),
         ),
-        if (message.sendStatus == MessageSendStatus.failed)
-          _buildStatusIcon(context),
+        if (message.sendStatus == MessageSendStatus.failed || message.sendStatus == MessageSendStatus.queued)
+          _buildStatusIcons(context),
       ],
     );
   }
@@ -196,26 +196,59 @@ class TerminalMessage extends StatelessWidget {
     }
   }
 
-  Widget _buildStatusIcon(BuildContext context) {
+  Widget _buildStatusIcons(BuildContext context) {
+    final content = message.parts.isNotEmpty ? message.parts.first.content : null;
+    
+    if (content == null) return const SizedBox.shrink();
+    
     return Padding(
       padding: const EdgeInsets.only(left: 12, top: 4),
-      child: Tooltip(
-        message: 'Failed to send. Tap to retry.',
-        child: InkWell(
-          onTap: () {
-            final content = message.parts.isNotEmpty ? message.parts.first.content : null;
-            if (content != null) {
-              // Resend the message by adding a new SendChatMessage event.
-              context.read<ChatBloc>().add(SendChatMessage(content));
-            }
-          },
-          borderRadius: BorderRadius.circular(20),
-          child: const Icon(
-            Icons.sync_problem,
-            color: OpenCodeTheme.error,
-            size: 20,
-          ),
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Status-specific primary icon
+          if (message.sendStatus == MessageSendStatus.failed) ...[
+            Tooltip(
+              message: 'Failed to send. Tap to retry.',
+              child: InkWell(
+                onTap: () {
+                  context.read<ChatBloc>().add(RetryMessage(content));
+                },
+                borderRadius: BorderRadius.circular(20),
+                child: const Icon(
+                  Icons.sync_problem,
+                  color: OpenCodeTheme.error,
+                  size: 20,
+                ),
+              ),
+            ),
+          ] else if (message.sendStatus == MessageSendStatus.queued) ...[
+            const Tooltip(
+              message: 'Message queued for sending when online',
+              child: Icon(
+                Icons.schedule,
+                color: OpenCodeTheme.secondary,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 8),
+            // Delete button for queued messages
+            Tooltip(
+              message: 'Remove from queue',
+              child: InkWell(
+                onTap: () {
+                  context.read<ChatBloc>().add(DeleteQueuedMessage(content));
+                },
+                borderRadius: BorderRadius.circular(20),
+                child: const Icon(
+                  Icons.close,
+                  color: OpenCodeTheme.error,
+                  size: 18,
+                ),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }

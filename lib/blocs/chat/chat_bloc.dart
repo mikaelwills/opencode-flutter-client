@@ -5,6 +5,7 @@ import '../session/session_event.dart' as session_events;
 import '../session/session_state.dart';
 import '../../services/sse_service.dart';
 import '../../services/opencode_client.dart';
+import '../../services/message_queue_service.dart';
 import '../../models/opencode_message.dart';
 import '../../models/opencode_event.dart';
 import '../../models/message_part.dart';
@@ -15,6 +16,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   final SessionBloc sessionBloc;
   final SSEService sseService;
   final OpenCodeClient openCodeClient;
+  final MessageQueueService messageQueueService;
 
   final List<OpenCodeMessage> _messages = [];
   final Map<String, int> _messageIndex = {}; // messageId -> index mapping
@@ -28,6 +30,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required this.sessionBloc,
     required this.sseService,
     required this.openCodeClient,
+    required this.messageQueueService,
   }) : super(ChatInitial()) {
     on<LoadMessagesForCurrentSession>(_onLoadMessagesForCurrentSession);
     on<SendChatMessage>(_onSendChatMessage);
@@ -36,6 +39,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ClearMessages>(_onClearMessages);
     on<ClearChat>(_onClearChat);
     on<AddUserMessage>(_onAddUserMessage);
+    on<RetryMessage>(_onRetryMessage);
+    on<DeleteQueuedMessage>(_onDeleteQueuedMessage);
     
     // Listen to SessionBloc for session changes (permanent subscription)
     _permanentSessionSubscription = sessionBloc.stream.listen((sessionState) {
@@ -122,10 +127,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
     final sessionId = currentState.sessionId;
 
-    try {
-      // Add user message to display immediately
-      _addUserMessage(sessionId, event.message);
+    // Add user message to display immediately and get its ID
+    final messageId = _addUserMessage(sessionId, event.message);
+    
+    if (messageId == null) {
+      print('📬 [ChatBloc] Failed to add user message - session mismatch');
+      return;
+    }
 
+    try {
       // Emit state with the new user message
       emit(ChatSendingMessage(
         sessionId: sessionId,
@@ -133,41 +143,43 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         messages: List.from(_messages),
       ));
 
-      // Send message to server
-      sessionBloc.add(session_events.SendMessage(
+      // Send message via MessageQueueService using the actual message ID (non-blocking)
+      messageQueueService.sendMessage(
+        messageId: messageId,
         sessionId: sessionId,
-        message: event.message,
-      ));
-
-      // Listen for session response without blocking
-      _sessionSubscription?.cancel();
-      _sessionSubscription = sessionBloc.stream.listen((sessionState) {
-        if (sessionState is SessionLoaded) {
-          // On success, update the message status to sent
-          _updateMessageStatus(event.message, MessageSendStatus.sent);
-          final actuallyStreaming = _messages.isNotEmpty &&
-              _messages.last.role == 'assistant' &&
-              _messages.last.isStreaming;
-          print('🔧 Session response: actuallyStreaming=$actuallyStreaming');
-          emit(_createChatReadyState(isStreaming: actuallyStreaming));
-          _sessionSubscription?.cancel();
-        } else if (sessionState is SessionError) {
-          // On failure, update the message status to failed
-          _updateMessageStatus(event.message, MessageSendStatus.failed);
-          print('Error sending message: ${sessionState.message}');
-          emit(_createChatReadyState()); // Emit ready state to allow retry
-          _sessionSubscription?.cancel();
-        }
-      });
+        content: event.message,
+        onStatusChange: (status) {
+          _updateMessageStatus(messageId, status);
+          
+          // Update UI based on status change
+          if (status == MessageSendStatus.sent) {
+            final actuallyStreaming = _messages.isNotEmpty &&
+                _messages.last.role == 'assistant' &&
+                _messages.last.isStreaming;
+            print('📬 [ChatBloc] Message sent successfully, actuallyStreaming=$actuallyStreaming');
+            emit(_createChatReadyState(isStreaming: actuallyStreaming));
+          } else if (status == MessageSendStatus.failed) {
+            print('📬 [ChatBloc] Message send failed');
+            emit(_createChatReadyState()); // Emit ready state to allow retry
+          } else if (status == MessageSendStatus.queued) {
+            print('📬 [ChatBloc] Message queued for offline sending');
+            emit(_createChatReadyState());
+          } else if (status == MessageSendStatus.sending) {
+            print('📬 [ChatBloc] Message being sent');
+            // Keep current state, no need to emit
+          }
+        },
+      );
+      
     } catch (e) {
       // On failure, update the message status to failed
-      _updateMessageStatus(event.message, MessageSendStatus.failed);
-      print('Failed to send message: ${e.toString()}');
+      _updateMessageStatus(messageId, MessageSendStatus.failed);
+      print('📬 [ChatBloc] Failed to send message: ${e.toString()}');
       emit(_createChatReadyState()); // Emit ready state to allow retry
     }
   }
 
-  void _addUserMessage(String sessionId, String content) {
+  String? _addUserMessage(String sessionId, String content) {
     if (sessionId == sessionBloc.currentSessionId) {
       // Check if we already have a user message with the same content to prevent duplicates
       final existingUserMessages = _messages.where((msg) =>
@@ -179,11 +191,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       if (existingUserMessages.isNotEmpty) {
         print(
             '🔍 [ChatBloc] User message already exists, skipping duplicate: "$content"');
-        return;
+        return existingUserMessages.first.id; // Return existing message ID
       }
 
+      final messageId = DateTime.now().millisecondsSinceEpoch.toString();
       final userMessage = OpenCodeMessage(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        id: messageId,
         sessionId: sessionId,
         role: 'user',
         created: DateTime.now(),
@@ -201,7 +214,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _messageIndex[userMessage.id] = _messages.length - 1;
       _enforceMessageLimit();
       print('🔥 [ChatBloc] Added user message: "$content"');
+      
+      return messageId; // Return the new message ID
     }
+    return null; // Session mismatch
   }
 
   Future<void> _onCancelCurrentOperation(
@@ -308,6 +324,96 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _addUserMessage(currentSessionId, event.content);
       _emitCurrentState(emit);
     }
+  }
+
+  Future<void> _onRetryMessage(
+    RetryMessage event,
+    Emitter<ChatState> emit,
+  ) async {
+    final currentState = state;
+    if (currentState is! ChatReady) {
+      return;
+    }
+
+    final sessionId = currentState.sessionId;
+    print('📬 [ChatBloc] Retrying message: "${event.messageContent}"');
+
+    // Find the failed message to get its ID
+    final failedMessageIndex = _messages.lastIndexWhere((msg) =>
+        msg.role == 'user' &&
+        msg.parts.isNotEmpty &&
+        msg.parts.first.content == event.messageContent &&
+        msg.sendStatus == MessageSendStatus.failed);
+
+    if (failedMessageIndex == -1) {
+      print('📬 [ChatBloc] Failed message not found for retry');
+      return;
+    }
+
+    final failedMessage = _messages[failedMessageIndex];
+    final messageId = failedMessage.id;
+
+    // Retry message via MessageQueueService using existing message ID (non-blocking)
+    messageQueueService.retryMessage(
+      messageId: messageId,
+      sessionId: sessionId,
+      content: event.messageContent,
+      onStatusChange: (status) {
+        _updateMessageStatus(messageId, status);
+        
+        // Update UI based on status change
+        if (status == MessageSendStatus.sent) {
+          final actuallyStreaming = _messages.isNotEmpty &&
+              _messages.last.role == 'assistant' &&
+              _messages.last.isStreaming;
+          print('📬 [ChatBloc] Retry successful, actuallyStreaming=$actuallyStreaming');
+          emit(_createChatReadyState(isStreaming: actuallyStreaming));
+        } else if (status == MessageSendStatus.failed) {
+          print('📬 [ChatBloc] Retry failed');
+          emit(_createChatReadyState());
+        } else if (status == MessageSendStatus.sending) {
+          print('📬 [ChatBloc] Retry in progress');
+          emit(_createChatReadyState());
+        }
+      },
+    );
+  }
+
+  void _onDeleteQueuedMessage(
+    DeleteQueuedMessage event,
+    Emitter<ChatState> emit,
+  ) {
+    print('📬 [ChatBloc] Deleting queued message: "${event.messageContent}"');
+    
+    // Find the queued message to get its actual ID
+    final queuedMessageIndex = _messages.lastIndexWhere((msg) =>
+        msg.role == 'user' &&
+        msg.parts.isNotEmpty &&
+        msg.parts.first.content == event.messageContent &&
+        msg.sendStatus == MessageSendStatus.queued);
+
+    if (queuedMessageIndex == -1) {
+      print('📬 [ChatBloc] Queued message not found for deletion');
+      return;
+    }
+
+    final queuedMessage = _messages[queuedMessageIndex];
+    final messageId = queuedMessage.id;
+    
+    // Remove from queue service using actual message ID
+    final removed = messageQueueService.removeFromQueue(messageId);
+    
+    if (removed) {
+      print('📬 [ChatBloc] Message removed from queue: $messageId');
+    }
+    
+    // Remove the message from local display
+    _messages.removeAt(queuedMessageIndex);
+    
+    // Update message index
+    _rebuildMessageIndex();
+    
+    emit(_createChatReadyState());
   }
 
   void _updateOrAddMessage(OpenCodeMessage message) {
@@ -615,24 +721,29 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     );
   }
 
+  void _rebuildMessageIndex() {
+    _messageIndex.clear();
+    for (int i = 0; i < _messages.length; i++) {
+      _messageIndex[_messages[i].id] = i;
+    }
+  }
+
   void _emitCurrentState(Emitter<ChatState> emit) {
     if (sessionBloc.currentSessionId != null) {
       emit(_createChatReadyState());
     }
   }
 
-  void _updateMessageStatus(String content, MessageSendStatus status) {
-    // Find the last user message with matching content that isn't already marked as failed.
-    // This prevents updating the wrong message if the user retries a failed message.
-    final index = _messages.lastIndexWhere((msg) =>
-        msg.role == 'user' &&
-        msg.parts.isNotEmpty &&
-        msg.parts.first.content == content &&
-        msg.sendStatus != MessageSendStatus.failed);
-
-    if (index != -1) {
+  void _updateMessageStatus(String messageId, MessageSendStatus status) {
+    // Use O(1) lookup with message index map
+    final index = _messageIndex[messageId];
+    
+    if (index != null && index < _messages.length) {
       final originalMessage = _messages[index];
       _messages[index] = originalMessage.copyWith(sendStatus: status);
+      print('📬 [ChatBloc] Updated message $messageId status to $status');
+    } else {
+      print('📬 [ChatBloc] Message $messageId not found for status update');
     }
   }
 
@@ -665,6 +776,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _eventSubscription?.cancel();
     _sessionSubscription?.cancel();
     _permanentSessionSubscription?.cancel();
+    messageQueueService.dispose();
     return super.close();
   }
 }

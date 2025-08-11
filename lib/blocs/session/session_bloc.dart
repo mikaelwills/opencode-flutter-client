@@ -216,6 +216,48 @@ class SessionBloc extends Bloc<SessionEvent, SessionState> {
 
   String? get currentSessionId => _currentSession?.id;
 
+  /// Send message directly without using events - for MessageQueueService
+  /// Returns Future that completes on success or throws on error
+  Future<void> sendMessageDirect(String sessionId, String message) async {
+    // Same validation logic as _onSendMessage
+    if (sessionId.trim().isEmpty) {
+      throw Exception('Invalid session ID');
+    }
+
+    if (message.trim().isEmpty) {
+      throw Exception('Message cannot be empty');
+    }
+
+    if (_currentSession == null) {
+      throw Exception('No active session to send message');
+    }
+
+    // Validate session ID matches current session
+    if (_currentSession!.id != sessionId) {
+      throw Exception(
+          'Session ID mismatch: expected ${_currentSession!.id}, got $sessionId');
+    }
+
+    try {
+      await openCodeClient.sendMessage(sessionId, message);
+      print('📤 Message sent directly');
+
+      // Update session to active state (same as event handler)
+      final updatedSession = _currentSession!.copyWith(
+        isActive: true,
+        lastActivity: DateTime.now(),
+      );
+      _currentSession = updatedSession;
+
+      // Note: No state emission - this is for direct calls only
+      // The MessageQueueService will handle status via callbacks
+      
+    } catch (e) {
+      print('❌ [SessionBloc] Failed to send message directly: $e');
+      rethrow; // Re-throw for MessageQueueService to handle
+    }
+  }
+
   Future<void> _persistCurrentSessionId(String sessionId) async {
     try {
       final prefs = await SharedPreferences.getInstance();

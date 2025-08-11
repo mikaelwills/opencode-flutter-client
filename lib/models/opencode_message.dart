@@ -7,6 +7,10 @@ enum MessageSendStatus {
   sent,
   // The message failed to send and can be retried.
   failed,
+  // Message is queued for sending when network connection is restored.
+  queued,
+  // Message is currently being sent to the server.
+  sending,
 }
 
 class OpenCodeMessage extends Equatable {

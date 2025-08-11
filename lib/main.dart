@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'theme/opencode_theme.dart';
 import 'services/opencode_client.dart';
 import 'services/sse_service.dart';
+import 'services/message_queue_service.dart';
 import 'blocs/connection/connection_bloc.dart';
 import 'blocs/session/session_bloc.dart';
 import 'blocs/session/session_event.dart';
@@ -84,11 +85,18 @@ class OpenCodeApp extends StatelessWidget {
               sessionBloc: sessionBloc,
             ),
           ),
+          Provider<MessageQueueService>(
+            create: (context) => MessageQueueService(
+              connectionBloc: context.read<ConnectionBloc>(),
+              sessionBloc: sessionBloc,
+            ),
+          ),
           BlocProvider<ChatBloc>(
             create: (context) => ChatBloc(
               sessionBloc: sessionBloc,
               sseService: context.read<SSEService>(),
               openCodeClient: context.read<OpenCodeClient>(),
+              messageQueueService: context.read<MessageQueueService>(),
             ),
           ),
           BlocProvider<InstanceBloc>(

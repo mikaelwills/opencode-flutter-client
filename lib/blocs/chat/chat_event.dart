@@ -43,3 +43,21 @@ class AddUserMessage extends ChatEvent {
   @override
   List<Object> get props => [content];
 }
+
+class RetryMessage extends ChatEvent {
+  final String messageContent;
+
+  const RetryMessage(this.messageContent);
+
+  @override
+  List<Object> get props => [messageContent];
+}
+
+class DeleteQueuedMessage extends ChatEvent {
+  final String messageContent;
+
+  const DeleteQueuedMessage(this.messageContent);
+
+  @override
+  List<Object> get props => [messageContent];
+}
