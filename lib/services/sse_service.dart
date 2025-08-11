@@ -21,6 +21,7 @@ class SSEService {
       return _eventController!.stream;
     }
 
+    
     _eventController = StreamController<OpenCodeEvent>.broadcast();
     _connectToSSE();
     return _eventController!.stream;
@@ -37,8 +38,11 @@ class SSEService {
             })
         .listen(
       (event) {
-        _isConnected = true;
+        if (!_isConnected) {
+          _isConnected = true;
+        }
         _reconnectAttempts = 0;
+        
         if (event.data != null && event.data!.isNotEmpty) {
           try {
             // PerformanceTracker.markSSEReceived(event.id);
@@ -48,7 +52,7 @@ class SSEService {
                                   _parseFullEvent(event.data!);
             
             if (openCodeEvent != null) {
-              // Only log message.part.updated events
+              // Only log message.part.updated events content
               if (openCodeEvent.type == 'message.part.updated') {
                 final text = openCodeEvent.data?['properties']?['part']?['text'] ?? '';
                 print('💬 message.part.updated | ${openCodeEvent.sessionId?.substring(0, 8) ?? 'null'}');

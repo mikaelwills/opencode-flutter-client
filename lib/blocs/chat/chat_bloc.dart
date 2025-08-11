@@ -97,8 +97,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     // Subscribe to SSE events and handle them properly
     _eventSubscription = sseService.connectToEventStream().listen(
       (sseEvent) {
-        // No logging here - handled in SSEService
-
         // Only process events for the current session
         if (sseEvent.sessionId == sessionBloc.currentSessionId) {
           add(SSEEventReceived(sseEvent));
@@ -265,6 +263,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         _handleSessionIdle();
         _emitCurrentState(emit);
         break;
+      case 'storage.write':
+      case 'session.updated':
+        // These are internal server events - ignore
+        break;
       default:
       // print('🔍 [ChatBloc] Unknown event type: ${sseEvent.type}');
     }
@@ -397,7 +399,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
                   content: partText ?? updatedParts[existingToolIndex].content,
                   metadata: partData.isNotEmpty ? partData : updatedParts[existingToolIndex].metadata,
                 );
-                print('🔧 [ChatBloc] Updated existing tool part: ${toolName ?? 'unnamed'}');
                 return true; // Skip adding new part
               } else {
                 // Add new tool part only if no duplicate exists
@@ -407,7 +408,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
                   content: partText,
                   metadata: partData,
                 ));
-                print('🔧 [ChatBloc] Added new tool part: ${toolName ?? 'unnamed'}');
               }
             } else {
               // Add new non-tool part normally
@@ -499,16 +499,18 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
   }
 
-  /// Check if a message's content duplicates a recent message from a different role
+  /// Smart duplicate detection that blocks exact echoes but allows legitimate responses
   bool _isDuplicateContent(String content, String role) {
     if (content.trim().isEmpty) return false;
 
-    // Look for messages from the opposite role in the last 30 seconds
     final now = DateTime.now();
-    final recentMessages = _messages.where((msg) =>
-        msg.role != role && now.difference(msg.created).inSeconds < 30);
+    final contentLower = content.toLowerCase().trim();
 
-    for (final message in recentMessages) {
+    // 1. Check for same-role duplicates (actual duplicate messages)
+    final sameRoleRecentMessages = _messages.where((msg) =>
+        msg.role == role && now.difference(msg.created).inSeconds < 30);
+
+    for (final message in sameRoleRecentMessages) {
       if (message.parts.isNotEmpty) {
         final messageContent = message.parts
             .where((part) => part.type == 'text')
@@ -517,10 +519,61 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             .trim();
 
         // Check for exact content match (case insensitive)
-        if (messageContent.toLowerCase() == content.toLowerCase()) {
-          print(
-              '🚫 Duplicate content detected: "$content" ($role duplicates ${message.role})');
+        if (messageContent.toLowerCase() == contentLower) {
+          print('🚫 [ChatBloc] Same-role duplicate content detected: "$content" ($role duplicates another $role message)');
           return true;
+        }
+      }
+    }
+
+    // 2. Check for exact echoes from opposite role (server echoing user input)
+    if (role == 'assistant') {
+      final recentUserMessages = _messages.where((msg) =>
+          msg.role == 'user' && now.difference(msg.created).inSeconds < 10); // Shorter window for echoes
+
+      for (final message in recentUserMessages) {
+        if (message.parts.isNotEmpty) {
+          final userContent = message.parts
+              .where((part) => part.type == 'text')
+              .map((part) => part.content ?? '')
+              .join(' ')
+              .trim()
+              .toLowerCase();
+
+          // Check for EXACT echo (assistant exactly repeating user input)
+          if (userContent == contentLower) {
+            print('🚫 [ChatBloc] Exact echo detected - blocking assistant message that exactly repeats user input: "$content"');
+            return true;
+          }
+
+          // If assistant message is much longer, it's probably a legitimate response that includes the user's content
+          if (contentLower.length > userContent.length * 1.5) {
+            continue;
+          }
+
+          // Check if it starts with common response patterns (legitimate responses)
+          final responsePatterns = [
+            'i\'ll help you',
+            'i can help',
+            'let me help',
+            'to test',
+            'for testing',
+            'you can test',
+            'here\'s how',
+            'to do this',
+          ];
+
+          bool isLegitimateResponse = responsePatterns.any((pattern) => 
+              contentLower.startsWith(pattern));
+
+          if (isLegitimateResponse) {
+            continue;
+          }
+
+          // If it contains the user content but has additional meaningful content, allow it
+          if (contentLower.contains(userContent) && contentLower.length > userContent.length + 10) {
+            continue;
+          }
         }
       }
     }
@@ -580,7 +633,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (index != -1) {
       final originalMessage = _messages[index];
       _messages[index] = originalMessage.copyWith(sendStatus: status);
-      print('🔄 [ChatBloc] Updated message status to $status for: "$content"');
     }
   }
 
