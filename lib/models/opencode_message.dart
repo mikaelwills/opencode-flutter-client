@@ -213,6 +213,15 @@ class OpenCodeMessage extends Equatable {
     );
   }
 
+  /// Get the combined text content from all text parts
+  String get content {
+    return parts
+        .where((part) => part.type == 'text' && part.content != null)
+        .map((part) => part.content!)
+        .join('\n')
+        .trim();
+  }
+
   @override
   List<Object?> get props => [id, sessionId, role, created, completed, parts, isStreaming, sendStatus];
 }
