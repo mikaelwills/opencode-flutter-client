@@ -219,28 +219,37 @@ class SessionBloc extends Bloc<SessionEvent, SessionState> {
   /// Send message directly without using events - for MessageQueueService
   /// Returns Future that completes on success or throws on error
   Future<void> sendMessageDirect(String sessionId, String message) async {
+    final displayMessage = message.length > 50 ? '${message.substring(0, 50)}...' : message;
+    print('🔐 [SessionBloc] sendMessageDirect called for session $sessionId, message: "$displayMessage"');
+    
     // Same validation logic as _onSendMessage
     if (sessionId.trim().isEmpty) {
+      print('❌ [SessionBloc] Validation failed: empty session ID');
       throw Exception('Invalid session ID');
     }
 
     if (message.trim().isEmpty) {
+      print('❌ [SessionBloc] Validation failed: empty message');
       throw Exception('Message cannot be empty');
     }
 
     if (_currentSession == null) {
+      print('❌ [SessionBloc] Validation failed: no active session');
       throw Exception('No active session to send message');
     }
 
     // Validate session ID matches current session
     if (_currentSession!.id != sessionId) {
+      print('❌ [SessionBloc] Validation failed: session mismatch (expected: ${_currentSession!.id}, got: $sessionId)');
       throw Exception(
           'Session ID mismatch: expected ${_currentSession!.id}, got $sessionId');
     }
 
+    print('✅ [SessionBloc] Validation passed - calling OpenCodeClient.sendMessage');
+
     try {
       await openCodeClient.sendMessage(sessionId, message);
-      print('📤 Message sent directly');
+      print('✅ [SessionBloc] OpenCodeClient.sendMessage completed successfully');
 
       // Update session to active state (same as event handler)
       final updatedSession = _currentSession!.copyWith(
@@ -248,12 +257,13 @@ class SessionBloc extends Bloc<SessionEvent, SessionState> {
         lastActivity: DateTime.now(),
       );
       _currentSession = updatedSession;
+      print('📤 [SessionBloc] Session updated to active state');
 
       // Note: No state emission - this is for direct calls only
       // The MessageQueueService will handle status via callbacks
       
     } catch (e) {
-      print('❌ [SessionBloc] Failed to send message directly: $e');
+      print('❌ [SessionBloc] OpenCodeClient.sendMessage failed: ${e.runtimeType}: $e');
       rethrow; // Re-throw for MessageQueueService to handle
     }
   }

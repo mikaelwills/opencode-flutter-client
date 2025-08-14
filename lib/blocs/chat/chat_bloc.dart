@@ -41,6 +41,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<AddUserMessage>(_onAddUserMessage);
     on<RetryMessage>(_onRetryMessage);
     on<DeleteQueuedMessage>(_onDeleteQueuedMessage);
+    on<MessageStatusChanged>(_onMessageStatusChanged);
     
     // Listen to SessionBloc for session changes (permanent subscription)
     _permanentSessionSubscription = sessionBloc.stream.listen((sessionState) {
@@ -150,24 +151,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         content: event.message,
         onStatusChange: (status) {
           _updateMessageStatus(messageId, status);
-          
-          // Update UI based on status change
-          if (status == MessageSendStatus.sent) {
-            final actuallyStreaming = _messages.isNotEmpty &&
-                _messages.last.role == 'assistant' &&
-                _messages.last.isStreaming;
-            print('📬 [ChatBloc] Message sent successfully, actuallyStreaming=$actuallyStreaming');
-            emit(_createChatReadyState(isStreaming: actuallyStreaming));
-          } else if (status == MessageSendStatus.failed) {
-            print('📬 [ChatBloc] Message send failed');
-            emit(_createChatReadyState()); // Emit ready state to allow retry
-          } else if (status == MessageSendStatus.queued) {
-            print('📬 [ChatBloc] Message queued for offline sending');
-            emit(_createChatReadyState());
-          } else if (status == MessageSendStatus.sending) {
-            print('📬 [ChatBloc] Message being sent');
-            // Keep current state, no need to emit
-          }
+          add(MessageStatusChanged(status));
         },
       );
       
@@ -360,21 +344,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       content: event.messageContent,
       onStatusChange: (status) {
         _updateMessageStatus(messageId, status);
-        
-        // Update UI based on status change
-        if (status == MessageSendStatus.sent) {
-          final actuallyStreaming = _messages.isNotEmpty &&
-              _messages.last.role == 'assistant' &&
-              _messages.last.isStreaming;
-          print('📬 [ChatBloc] Retry successful, actuallyStreaming=$actuallyStreaming');
-          emit(_createChatReadyState(isStreaming: actuallyStreaming));
-        } else if (status == MessageSendStatus.failed) {
-          print('📬 [ChatBloc] Retry failed');
-          emit(_createChatReadyState());
-        } else if (status == MessageSendStatus.sending) {
-          print('📬 [ChatBloc] Retry in progress');
-          emit(_createChatReadyState());
-        }
+        add(MessageStatusChanged(status));
       },
     );
   }
@@ -414,6 +384,31 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _rebuildMessageIndex();
     
     emit(_createChatReadyState());
+  }
+
+  void _onMessageStatusChanged(
+    MessageStatusChanged event,
+    Emitter<ChatState> emit,
+  ) {
+    final status = event.status;
+    
+    // Update UI based on status change
+    if (status == MessageSendStatus.sent) {
+      final actuallyStreaming = _messages.isNotEmpty &&
+          _messages.last.role == 'assistant' &&
+          _messages.last.isStreaming;
+      print('📬 [ChatBloc] Message sent successfully, actuallyStreaming=$actuallyStreaming');
+      emit(_createChatReadyState(isStreaming: actuallyStreaming));
+    } else if (status == MessageSendStatus.failed) {
+      print('📬 [ChatBloc] Message send failed');
+      emit(_createChatReadyState()); // Emit ready state to allow retry
+    } else if (status == MessageSendStatus.queued) {
+      print('📬 [ChatBloc] Message queued for offline sending');
+      emit(_createChatReadyState());
+    } else if (status == MessageSendStatus.sending) {
+      print('📬 [ChatBloc] Message being sent');
+      // Keep current state, no need to emit
+    }
   }
 
   void _updateOrAddMessage(OpenCodeMessage message) {

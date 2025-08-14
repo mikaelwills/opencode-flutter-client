@@ -92,12 +92,19 @@ class OpenCodeApp extends StatelessWidget {
             ),
           ),
           BlocProvider<ChatBloc>(
-            create: (context) => ChatBloc(
-              sessionBloc: sessionBloc,
-              sseService: context.read<SSEService>(),
-              openCodeClient: context.read<OpenCodeClient>(),
-              messageQueueService: context.read<MessageQueueService>(),
-            ),
+            create: (context) {
+              final chatBloc = ChatBloc(
+                sessionBloc: sessionBloc,
+                sseService: context.read<SSEService>(),
+                openCodeClient: context.read<OpenCodeClient>(),
+                messageQueueService: context.read<MessageQueueService>(),
+              );
+              
+              // Initialize the MessageQueueService's ChatBloc listener
+              context.read<MessageQueueService>().initChatBlocListener(chatBloc);
+              
+              return chatBloc;
+            },
           ),
           BlocProvider<InstanceBloc>(
             create: (context) => InstanceBloc(),

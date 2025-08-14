@@ -35,7 +35,12 @@ class MessageQueueService {
   final Queue<QueuedMessage> _messageQueue = Queue<QueuedMessage>();
   StreamSubscription<ConnectionState>? _connectionSubscription;
   StreamSubscription<SessionState>? _sessionSubscription;
+  StreamSubscription? _chatBlocSubscription;
   Timer? _retryTimer;
+  
+  // Track pending messages waiting for SSE confirmation
+  final Map<String, Timer> _pendingMessageTimeouts = {};
+  final Map<String, Function(MessageSendStatus)> _pendingCallbacks = {};
   
   static const int maxRetries = 3;
   static const List<Duration> retryDelays = [
@@ -49,6 +54,66 @@ class MessageQueueService {
     required this.sessionBloc,
   }) {
     _initConnectionListener();
+  }
+  
+  /// Initialize ChatBloc listener - called after ChatBloc is created
+  void initChatBlocListener(dynamic chatBloc) {
+    _chatBlocSubscription = chatBloc.stream.listen((chatState) {
+      // Check if assistant started streaming (ChatReady with isStreaming: true)
+      if (chatState.runtimeType.toString().contains('ChatReady')) {
+        final isStreaming = chatState.isStreaming as bool? ?? false;
+        if (isStreaming) {
+          _handleStreamingStarted();
+        }
+      }
+    });
+  }
+  
+  /// Called when assistant starts streaming - marks pending message as sent
+  void _handleStreamingStarted() {
+    print('📬 [MessageQueue] Assistant streaming started - checking for pending messages');
+    
+    // Mark the most recent pending message as sent
+    if (_pendingMessageTimeouts.isNotEmpty) {
+      final messageId = _pendingMessageTimeouts.keys.first;
+      print('📬 [MessageQueue] Marking pending message $messageId as sent via SSE');
+      _markMessageSentViaSSE(messageId);
+    }
+  }
+  
+  /// Mark a message as sent via SSE (cancel timeout)
+  void _markMessageSentViaSSE(String messageId) {
+    if (_pendingMessageTimeouts.containsKey(messageId)) {
+      // Cancel timeout
+      _pendingMessageTimeouts[messageId]?.cancel();
+      
+      // Mark as sent
+      final callback = _pendingCallbacks[messageId];
+      if (callback != null) {
+        print('📊 [MessageQueue] Message $messageId status → sent (reason: SSE streaming started)');
+        callback(MessageSendStatus.sent);
+      }
+      
+      // Clean up
+      _cleanupPendingMessage(messageId);
+    }
+  }
+  
+  /// Mark a message as failed
+  void _markMessageFailed(String messageId, String reason) {
+    final callback = _pendingCallbacks[messageId];
+    if (callback != null) {
+      print('📊 [MessageQueue] Message $messageId status → failed (reason: $reason)');
+      callback(MessageSendStatus.failed);
+    }
+    _cleanupPendingMessage(messageId);
+  }
+  
+  /// Clean up tracking for a message
+  void _cleanupPendingMessage(String messageId) {
+    _pendingMessageTimeouts.remove(messageId)?.cancel();
+    _pendingCallbacks.remove(messageId);
+    print('📬 [MessageQueue] Cleaned up pending message: $messageId');
   }
 
   /// Initialize listeners for connection and session state changes
@@ -79,15 +144,16 @@ class MessageQueueService {
     required Function(MessageSendStatus) onStatusChange,
   }) async {
     final connectionState = connectionBloc.state;
+    print('📤 [MessageQueue] Sending message $messageId: "$content" (session: $sessionId, connectionState: ${connectionState.runtimeType})');
     
     if (connectionState is Connected) {
       // Online: send directly
-      print('📬 [MessageQueue] Online - sending message directly: "$content"');
+      print('📬 [MessageQueue] Online - sending message $messageId directly');
       onStatusChange(MessageSendStatus.sending);
       await _sendMessageDirect(messageId, sessionId, content, onStatusChange);
     } else {
       // Offline: add to queue
-      print('📬 [MessageQueue] Offline - queuing message: "$content"');
+      print('📬 [MessageQueue] Offline (${connectionState.runtimeType}) - queuing message $messageId');
       final queuedMessage = QueuedMessage(
         messageId: messageId,
         sessionId: sessionId,
@@ -98,7 +164,7 @@ class MessageQueueService {
       
       _messageQueue.add(queuedMessage);
       onStatusChange(MessageSendStatus.queued);
-      print('📬 [MessageQueue] Message queued. Queue size: ${_messageQueue.length}');
+      print('📬 [MessageQueue] Message $messageId queued. Queue size: ${_messageQueue.length}');
     }
   }
 
@@ -159,26 +225,44 @@ class MessageQueueService {
     String content,
     Function(MessageSendStatus) onStatusChange,
   ) async {
-    try {
-      onStatusChange(MessageSendStatus.sending);
-      
-      // Use SessionBloc's direct method with timeout - NO SUBSCRIPTIONS
-      await sessionBloc.sendMessageDirect(sessionId, content)
-          .timeout(
-            const Duration(seconds: 10),
-            onTimeout: () => throw TimeoutException('Send timeout', const Duration(seconds: 10)),
-          );
-      
-      // Success - Future completed normally
-      print('📬 [MessageQueue] Message sent successfully: "$content"');
-      onStatusChange(MessageSendStatus.sent);
-      
-    } catch (error) {
-      // Any error (network, timeout, validation)
-      print('📬 [MessageQueue] Send error: $error');
-      onStatusChange(MessageSendStatus.failed);
-      // Don't rethrow - error handled via callback
-    }
+    final startTime = DateTime.now();
+    print('📤 [MessageQueue] Message $messageId - calling SessionBloc.sendMessageDirect at ${startTime.millisecondsSinceEpoch}');
+    
+    // Set initial status
+    onStatusChange(MessageSendStatus.sending);
+    print('📊 [MessageQueue] Message $messageId status → sending (reason: starting SessionBloc call)');
+    
+    // Start timeout timer (will be cancelled if SSE streaming starts)
+    final timeoutTimer = Timer(const Duration(seconds: 10), () {
+      if (_pendingMessageTimeouts.containsKey(messageId)) {
+        final elapsed = DateTime.now().difference(startTime).inMilliseconds;
+        print('⏱️ [MessageQueue] Message $messageId - timeout after ${elapsed}ms (no SSE response)');
+        _markMessageFailed(messageId, 'Timeout - no response from server');
+      }
+    });
+    
+    // Track this pending message
+    _pendingMessageTimeouts[messageId] = timeoutTimer;
+    _pendingCallbacks[messageId] = onStatusChange;
+    print('📬 [MessageQueue] Message $messageId - tracking as pending with timeout');
+    
+    // Start HTTP request (don't await it)
+    final httpFuture = sessionBloc.sendMessageDirect(sessionId, content);
+    
+    // Handle the eventual HTTP completion (but don't wait for it)
+    httpFuture.then((_) {
+      final elapsed = DateTime.now().difference(startTime).inMilliseconds;
+      print('📤 [MessageQueue] Message $messageId - HTTP completed successfully in ${elapsed}ms');
+      // Don't update status here - SSE streaming will have already handled it
+      _cleanupPendingMessage(messageId);
+    }).catchError((error) {
+      final elapsed = DateTime.now().difference(startTime).inMilliseconds;
+      print('❌ [MessageQueue] Message $messageId - HTTP failed after ${elapsed}ms: $error');
+      // Only mark as failed if not already handled by SSE or timeout
+      if (_pendingMessageTimeouts.containsKey(messageId)) {
+        _markMessageFailed(messageId, 'HTTP error: ${error.runtimeType}: $error');
+      }
+    });
   }
 
   /// Get current queue size
@@ -191,8 +275,17 @@ class MessageQueueService {
   void dispose() {
     _connectionSubscription?.cancel();
     _sessionSubscription?.cancel();
+    _chatBlocSubscription?.cancel();
     _retryTimer?.cancel();
     _messageQueue.clear();
+    
+    // Cancel any pending timeouts
+    for (final timer in _pendingMessageTimeouts.values) {
+      timer.cancel();
+    }
+    _pendingMessageTimeouts.clear();
+    _pendingCallbacks.clear();
+    
     print('📬 [MessageQueue] Service disposed');
   }
 }

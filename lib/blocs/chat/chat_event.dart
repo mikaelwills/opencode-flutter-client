@@ -1,5 +1,6 @@
 import 'package:equatable/equatable.dart';
 import '../../models/opencode_event.dart';
+import '../../models/opencode_message.dart';
 
 abstract class ChatEvent extends Equatable {
   const ChatEvent();
@@ -60,4 +61,16 @@ class DeleteQueuedMessage extends ChatEvent {
 
   @override
   List<Object> get props => [messageContent];
+}
+
+// Internal event for refreshing chat state during reconnection
+class RefreshChatStateEvent extends ChatEvent {}
+
+class MessageStatusChanged extends ChatEvent {
+  final MessageSendStatus status;
+
+  const MessageStatusChanged(this.status);
+
+  @override
+  List<Object> get props => [status];
 }

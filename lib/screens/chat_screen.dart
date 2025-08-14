@@ -111,6 +111,10 @@ class _ChatScreenState extends State<ChatScreen> {
                         _scrollToBottom(force: true);
                       } else if (isNewMessage || state.isStreaming) {
                         _scrollToBottom(force: state.isStreaming);
+                      } else if (state.isReconnectionRefresh && _isUserNearBottom) {
+                        // User was at bottom before reconnection, scroll back to bottom
+                        print('🔄 [ChatScreen] Reconnection detected - restoring bottom scroll position');
+                        _scrollToBottom(force: true);
                       }
                     });
                   } else if (state is ChatSendingMessage) {
