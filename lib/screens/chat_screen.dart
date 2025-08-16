@@ -125,9 +125,11 @@ class _ChatScreenState extends State<ChatScreen> {
                 },
                 child: BlocBuilder<ChatBloc, ChatState>(
                   builder: (context, state) {
-                    if (state is ChatReady) {
-                      final messages = state.messages;
-                      final isStreaming = state.isStreaming;
+                    if (state is ChatReady || state is ChatSendingMessage) {
+                      final messages = state is ChatReady 
+                          ? state.messages 
+                          : (state as ChatSendingMessage).messages;
+                      final isStreaming = state is ChatReady ? state.isStreaming : false;
 
                       if (messages.isEmpty) {
                         return const Center(
@@ -137,46 +139,20 @@ class _ChatScreenState extends State<ChatScreen> {
                           ),
                         );
                       }
+
                       return ListView.builder(
+                        key: const ValueKey('message-list'), // Preserve widget identity
                         controller: _scrollController,
                         padding: const EdgeInsets.all(16),
                         itemCount: messages.length,
                         itemBuilder: (context, index) {
                           final message = messages[index];
                           final isLastMessage = index == messages.length - 1;
-                          final isStreamingMessage =
-                              isStreaming && isLastMessage;
+                          final isStreamingMessage = isStreaming && isLastMessage;
 
                           return TerminalMessage(
                             message: message,
                             isStreaming: isStreamingMessage,
-                          );
-                        },
-                      );
-                    }
-
-                    if (state is ChatSendingMessage) {
-                      final messages = state.messages;
-
-                      if (messages.isEmpty) {
-                        return const Center(
-                          child: Text(
-                            'Type a message to get started',
-                            style: OpenCodeTextStyles.terminal,
-                          ),
-                        );
-                      }
-
-                      return ListView.builder(
-                        controller: _scrollController,
-                        padding: const EdgeInsets.all(16),
-                        itemCount: messages.length,
-                        itemBuilder: (context, index) {
-                          final message = messages[index];
-
-                          return TerminalMessage(
-                            message: message,
-                            isStreaming: false, // Not streaming during send
                           );
                         },
                       );
@@ -229,28 +205,9 @@ class _ChatScreenState extends State<ChatScreen> {
             Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                BlocBuilder<ChatBloc, ChatState>(
-                  builder: (context, chatState) {
-                    final isEnabled = chatState is ChatReady;
-                    final isSending = chatState is ChatSendingMessage;
-
-                    return BlocBuilder<SessionBloc, SessionState>(
-                      builder: (context, sessionState) {
-                        return PromptField(
-                          onSendMessage: isEnabled
-                              ? (message) {
-                                  context
-                                      .read<ChatBloc>()
-                                      .add(SendChatMessage(message));
-                                }
-                              : null,
-                          isEnabled: isEnabled && !isSending,
-                          placeholder: isSending
-                              ? 'Sending message...'
-                              : 'Type your message...',
-                        );
-                      },
-                    );
+                PromptField(
+                  onSendMessage: (message) {
+                    context.read<ChatBloc>().add(SendChatMessage(message));
                   },
                 ),
                 const ConnectionStatusRow(),
