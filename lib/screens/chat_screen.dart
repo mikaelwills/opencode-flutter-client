@@ -9,8 +9,8 @@ import '../blocs/session/session_bloc.dart';
 import '../blocs/session/session_state.dart';
 import '../widgets/terminal_message.dart';
 import '../widgets/prompt_field.dart';
-
 import '../widgets/connection_status_row.dart';
+import '../models/opencode_message.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({
@@ -33,6 +33,17 @@ class _ChatScreenState extends State<ChatScreen> {
     super.initState();
     _scrollController = ScrollController();
     _scrollController.addListener(_onScroll);
+    
+    // Scroll to bottom when entering chat screen (e.g., from sessions list)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final chatBloc = context.read<ChatBloc>();
+      final lastMessage = chatBloc.state is ChatReady
+          ? (chatBloc.state as ChatReady).messages.isNotEmpty
+              ? (chatBloc.state as ChatReady).messages.last
+              : null
+          : null;
+      _scrollToBottom(force: true, lastMessage: lastMessage);
+    });
   }
 
   @override
@@ -59,14 +70,30 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  void _scrollToBottom({bool force = false, bool animate = true}) {
+  double _calculateMessageHeight(OpenCodeMessage? message) {
+    if (message == null) return 100; // Safe fallback
+    
+    // Get total character count from all text parts
+    final totalChars = message.parts
+        .where((part) => part.type == 'text')
+        .map((part) => part.content?.length ?? 0)
+        .fold(0, (sum, length) => sum + length);
+    
+    // Simple estimation: 1.5 pixels per character (includes wrapping)
+    // Plus base message padding (32px)
+    return (totalChars * 1.5) + 32;
+  }
+
+  void _scrollToBottom({bool force = false, bool animate = true, OpenCodeMessage? lastMessage}) {
     if (!_scrollController.hasClients) return;
 
     final position = _scrollController.position;
     if (position.maxScrollExtent <= 0) return; // No content to scroll to
 
     if (force || _isUserNearBottom) {
-      final targetOffset = position.maxScrollExtent;
+      // Add extra scroll distance based on last message height
+      final extraHeight = _calculateMessageHeight(lastMessage);
+      final targetOffset = position.maxScrollExtent + extraHeight;
 
       if (animate && (targetOffset - position.pixels).abs() > 10) {
         _scrollController.animateTo(
@@ -107,19 +134,21 @@ class _ChatScreenState extends State<ChatScreen> {
 
                     _lastMessageCount = currentMessageCount;
                     WidgetsBinding.instance.addPostFrameCallback((_) {
+                      final lastMessage = state.messages.isNotEmpty ? state.messages.last : null;
                       if (isNewMessage && isUserMessage) {
-                        _scrollToBottom(force: true);
+                        _scrollToBottom(force: true, lastMessage: lastMessage);
                       } else if (isNewMessage || state.isStreaming) {
-                        _scrollToBottom(force: state.isStreaming);
+                        _scrollToBottom(force: state.isStreaming, lastMessage: lastMessage);
                       } else if (state.isReconnectionRefresh && _isUserNearBottom) {
                         // User was at bottom before reconnection, scroll back to bottom
                         print('🔄 [ChatScreen] Reconnection detected - restoring bottom scroll position');
-                        _scrollToBottom(force: true);
+                        _scrollToBottom(force: true, lastMessage: lastMessage);
                       }
                     });
                   } else if (state is ChatSendingMessage) {
                     WidgetsBinding.instance.addPostFrameCallback((_) {
-                      _scrollToBottom(force: true);
+                      final lastMessage = state.messages.isNotEmpty ? state.messages.last : null;
+                      _scrollToBottom(force: true, lastMessage: lastMessage);
                     });
                   }
                 },
@@ -224,7 +253,15 @@ class _ChatScreenState extends State<ChatScreen> {
             duration: const Duration(milliseconds: 200),
             opacity: _showScrollToBottomButton ? 1.0 : 0.0,
             child: FloatingActionButton.small(
-              onPressed: () => _scrollToBottom(force: true),
+              onPressed: () {
+                final chatBloc = context.read<ChatBloc>();
+                final lastMessage = chatBloc.state is ChatReady
+                    ? (chatBloc.state as ChatReady).messages.isNotEmpty
+                        ? (chatBloc.state as ChatReady).messages.last
+                        : null
+                    : null;
+                _scrollToBottom(force: true, lastMessage: lastMessage);
+              },
               backgroundColor: OpenCodeTheme.surface,
               foregroundColor: OpenCodeTheme.primary,
               elevation: 4,
