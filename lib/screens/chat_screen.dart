@@ -28,6 +28,7 @@ class _ChatScreenState extends State<ChatScreen> {
   static const double _scrollThreshold = 100.0; // pixels from bottom
   int _lastMessageCount = 0;
   bool _wasStreaming = false;
+  double _promptFieldHeight = 60.0; // Default height estimate
 
   @override
   void initState() {
@@ -83,10 +84,15 @@ class _ChatScreenState extends State<ChatScreen> {
     // Simple estimation: 1.5 pixels per character (includes wrapping)
     // Plus base message padding (32px)
     final calculatedHeight = (totalChars * 1.1);
-    
+
     return calculatedHeight;
   }
 
+  void _onPromptFieldHeightChanged(double height) {
+    setState(() {
+      _promptFieldHeight = height;
+    });
+  }
 
   void _scrollToBottom(
       {bool force = false, bool animate = true, OpenCodeMessage? lastMessage}) {
@@ -99,7 +105,7 @@ class _ChatScreenState extends State<ChatScreen> {
       // Use post-frame callback to ensure ListView has updated its dimensions
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!_scrollController.hasClients) return;
-        
+
         final updatedPosition = _scrollController.position;
         final targetOffset = updatedPosition.maxScrollExtent;
 
@@ -142,11 +148,12 @@ class _ChatScreenState extends State<ChatScreen> {
                           state.messages.last.role == 'user';
 
                       _lastMessageCount = currentMessageCount;
-                      
+
                       // Check if streaming just stopped
-                      final streamingJustStopped = _wasStreaming && !state.isStreaming;
+                      final streamingJustStopped =
+                          _wasStreaming && !state.isStreaming;
                       _wasStreaming = state.isStreaming;
-                      
+
                       WidgetsBinding.instance.addPostFrameCallback((_) {
                         final lastMessage = state.messages.isNotEmpty
                             ? state.messages.last
@@ -161,7 +168,8 @@ class _ChatScreenState extends State<ChatScreen> {
                               force: true, lastMessage: lastMessage);
                         } else if (streamingJustStopped) {
                           // Fallback scroll when streaming just stopped
-                          print('🎯 [ChatScreen] Streaming stopped - final scroll to bottom');
+                          print(
+                              '🎯 [ChatScreen] Streaming stopped - final scroll to bottom');
                           _scrollToBottom(
                               force: true, lastMessage: lastMessage);
                         } else if (state.isStreaming) {
@@ -277,21 +285,20 @@ class _ChatScreenState extends State<ChatScreen> {
                     onSendMessage: (message) {
                       context.read<ChatBloc>().add(SendChatMessage(message));
                     },
+                    onHeightChanged: _onPromptFieldHeightChanged,
                   ),
                   const ConnectionStatusRow(),
                 ],
               ),
             ],
           ),
-          // Scroll to bottom button
-          AnimatedPositioned(
-            duration: const Duration(milliseconds: 200),
-            bottom:
-                _showScrollToBottomButton ? 80 : -60, // Above the input area
-            right: 16,
-            child: AnimatedOpacity(
-              duration: const Duration(milliseconds: 200),
-              opacity: _showScrollToBottomButton ? 1.0 : 0.0,
+
+          // Scroll-to-bottom button positioned above prompt field
+          if (_showScrollToBottomButton)
+            Positioned(
+              bottom: _promptFieldHeight +
+                  60, // 40px above prompt field (includes ConnectionStatusRow)
+              right: 30,
               child: FloatingActionButton.small(
                 onPressed: () {
                   final chatBloc = context.read<ChatBloc>();
@@ -302,13 +309,11 @@ class _ChatScreenState extends State<ChatScreen> {
                       : null;
                   _scrollToBottom(force: true, lastMessage: lastMessage);
                 },
-                backgroundColor: OpenCodeTheme.surface,
-                foregroundColor: OpenCodeTheme.primary,
-                elevation: 4,
-                child: const Icon(Icons.keyboard_arrow_down, size: 20),
+                backgroundColor: Colors.grey[900],
+                foregroundColor: Colors.white,
+                child: const Icon(Icons.keyboard_arrow_down),
               ),
             ),
-          ),
         ],
       ),
     );

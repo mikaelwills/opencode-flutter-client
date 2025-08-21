@@ -4,13 +4,18 @@ import '../theme/opencode_theme.dart';
 import '../blocs/chat/chat_bloc.dart';
 import '../blocs/chat/chat_state.dart';
 import 'cancel_button.dart';
+import 'send_button.dart';
+
+typedef HeightCallback = void Function(double height);
 
 class PromptField extends StatefulWidget {
   final Function(String)? onSendMessage;
+  final HeightCallback? onHeightChanged;
 
   const PromptField({
     super.key,
     this.onSendMessage,
+    this.onHeightChanged,
   });
 
   @override
@@ -20,12 +25,42 @@ class PromptField extends StatefulWidget {
 class _PromptFieldState extends State<PromptField> {
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
+  final GlobalKey _promptKey = GlobalKey();
+  bool _hasText = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(_onTextChanged);
+    // Initial height measurement
+    WidgetsBinding.instance.addPostFrameCallback((_) => _updateHeight());
+  }
 
   @override
   void dispose() {
+    _controller.removeListener(_onTextChanged);
     _controller.dispose();
     _focusNode.dispose();
     super.dispose();
+  }
+
+  void _onTextChanged() {
+    final hasText = _controller.text.trim().isNotEmpty;
+    if (hasText != _hasText) {
+      setState(() {
+        _hasText = hasText;
+      });
+    }
+    _updateHeight();
+  }
+
+  void _updateHeight() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final RenderBox? renderBox = _promptKey.currentContext?.findRenderObject() as RenderBox?;
+      if (renderBox != null && widget.onHeightChanged != null) {
+        widget.onHeightChanged!(renderBox.size.height);
+      }
+    });
   }
 
   void _sendMessage() {
@@ -60,45 +95,50 @@ class _PromptFieldState extends State<PromptField> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(left: 16, right: 16),
-      height: 56, // Fixed height to prevent growing
-      decoration: const BoxDecoration(
-        border: Border(
-          left: BorderSide(
-            color: OpenCodeTheme.primary,
-            width: 2,
+    return Stack(
+      children: [
+        ConstrainedBox(
+          key: _promptKey,
+          constraints: const BoxConstraints(
+            maxHeight: 200, // Maximum height to prevent excessive growth
           ),
-          right: BorderSide(
-            color: OpenCodeTheme.primary,
-            width: 2,
-          ),
-        ),
-      ),
-      padding: const EdgeInsets.only(left: 12, right: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+          child: Container(
+            margin: const EdgeInsets.only(left: 16, right: 16),
+            decoration: const BoxDecoration(
+              border: Border(
+                left: BorderSide(
+                  color: OpenCodeTheme.primary,
+                  width: 2,
+                ),
+                right: BorderSide(
+                  color: OpenCodeTheme.primary,
+                  width: 2,
+                ),
+              ),
+            ),
+            padding: const EdgeInsets.only(left: 12, right: 12),
+            child: IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Terminal prompt symbol
-          const Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                OpenCodeSymbols.prompt,
-                style: OpenCodeTextStyles.prompt,
-              ),
-            ],
+          const Center(
+            child: Text(
+              OpenCodeSymbols.prompt,
+              style: OpenCodeTextStyles.prompt,
+            ),
           ),
           const SizedBox(width: 12),
 
           // Input field
-          Flexible(
+          Expanded(
             child: TextField(
               controller: _controller,
               focusNode: _focusNode,
               style: OpenCodeTextStyles.terminal,
-              textAlignVertical: TextAlignVertical.center,
+              textAlignVertical: TextAlignVertical.top,
               showCursor: true,
+              scrollPhysics: const BouncingScrollPhysics(),
               decoration: InputDecoration(
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
@@ -114,13 +154,13 @@ class _PromptFieldState extends State<PromptField> {
                   color: OpenCodeTheme.textSecondary.withOpacity(0.6),
                 ),
               ),
-              maxLines: 1,
-              textInputAction: TextInputAction.send,
-              onSubmitted: (_) => _sendMessage(),
+              maxLines: null, // Unlimited lines
+              minLines: 1, // Start with single line
+              textInputAction: TextInputAction.newline,
             ),
           ),
 
-          // Cancel button (only during active streaming)
+          // Send/Cancel button toggle
           BlocBuilder<ChatBloc, ChatState>(
             buildWhen: (previous, current) =>
                 _shouldShowCancelButton(previous) !=
@@ -128,23 +168,35 @@ class _PromptFieldState extends State<PromptField> {
             builder: (context, state) {
               final showCancelButton = _shouldShowCancelButton(state);
               final sessionId = _getSessionId(state);
+              final showSendButton = _hasText && !showCancelButton;
 
               if (showCancelButton) {
-                return Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const SizedBox(width: 10),
-                    CancelButton(sessionId: sessionId ?? ''),
-                    const SizedBox(width: 10),
-                  ],
+                return Padding(
+                  padding: const EdgeInsets.only(left: 10),
+                  child: Align(
+                    alignment: Alignment.bottomCenter,
+                    child: CancelButton(sessionId: sessionId ?? ''),
+                  ),
+                );
+              } else if (showSendButton) {
+                return Padding(
+                  padding: const EdgeInsets.only(left: 10),
+                  child: Align(
+                    alignment: Alignment.bottomCenter,
+                    child: SendButton(onPressed: _sendMessage),
+                  ),
                 );
               }
 
               return const SizedBox.shrink();
             },
           ),
-        ],
+            ],
+          ),
+        ),
       ),
+    ),
+      ],
     );
   }
 }
