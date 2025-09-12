@@ -6,6 +6,7 @@ import 'package:opencode_flutter_client/blocs/chat/chat_state.dart';
 import '../theme/opencode_theme.dart';
 import '../blocs/connection/connection_bloc.dart';
 import '../blocs/connection/connection_state.dart' as connection_states;
+import '../blocs/connection/connection_event.dart';
 import '../blocs/config/config_cubit.dart';
 import '../blocs/config/config_state.dart';
 import '../services/network_service.dart';
@@ -45,6 +46,8 @@ class _ConnectionStatusRowState extends State<ConnectionStatusRow>
     super.dispose();
   }
 
+
+
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<ConfigCubit, ConfigState>(
@@ -66,9 +69,10 @@ class _ConnectionStatusRowState extends State<ConnectionStatusRow>
             final networkIcon = networkStatus?.icon ?? '';
             
             String statusText;
+            bool isReconnecting = connectionState is connection_states.Reconnecting;
             if (connectionState is connection_states.Connected) {
               statusText = '$networkIcon Connected to $ipText';
-            } else if (connectionState is connection_states.Reconnecting) {
+            } else if (isReconnecting) {
               statusText = '$networkIcon Reconnecting to $ipText...';
             } else if (connectionState is connection_states.Disconnected) {
               final isIntentional = connectionState.isIntentional;
@@ -129,12 +133,14 @@ class _ConnectionStatusRowState extends State<ConnectionStatusRow>
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        statusText,
-                        style: const TextStyle(
-                          color: OpenCodeTheme.textSecondary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w400,
+                      Expanded(
+                        child: Text(
+                          statusText,
+                          style: TextStyle(
+                            color: isReconnecting ? OpenCodeTheme.warning : OpenCodeTheme.textSecondary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w400,
+                          ),
                         ),
                       ),
                       _buildConnectionIndicator(connectionState)

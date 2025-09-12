@@ -9,6 +9,9 @@ import '../blocs/session/session_bloc.dart';
 import '../blocs/session/session_event.dart';
 import '../blocs/instance/instance_bloc.dart';
 import '../blocs/instance/instance_event.dart';
+import '../blocs/connection/connection_bloc.dart';
+import '../blocs/connection/connection_state.dart' as connection_states;
+import '../blocs/connection/connection_event.dart';
 import '../models/opencode_instance.dart';
 import 'terminal_button.dart';
 
@@ -19,6 +22,8 @@ class NavBar extends StatelessWidget {
     context.read<ChatBloc>().add(ClearChat());
     context.read<SessionBloc>().add(CreateSession());
   }
+
+
 
   void _showAddInstanceDialog(BuildContext context) {
     final nameController = TextEditingController();
@@ -262,54 +267,58 @@ class NavBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final currentLocation = GoRouterState.of(context).uri.toString();
 
-    return Container(
-      height: 60,
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      decoration: const BoxDecoration(
-        color: OpenCodeTheme.surface,
-      ),
-      child: Row(
-        children: [
-          if (currentLocation == '/settings') ...[
-            GestureDetector(
-                onTap: () => SessionValidator.navigateToChat(context),
-                child: const Icon(Icons.arrow_left, color: OpenCodeTheme.text)),
-          ],
-          if (currentLocation == '/sessions') ...[
-            GestureDetector(
-                onTap: () => SessionValidator.navigateToChat(context),
-                child: const Icon(Icons.arrow_left, color: OpenCodeTheme.text)),
-          ],
-          if (currentLocation == '/provider-list') ...[
-            GestureDetector(
-                onTap: () => SessionValidator.navigateToChat(context),
-                child: const Icon(Icons.arrow_left, color: OpenCodeTheme.text)),
-          ],
-          if (currentLocation == '/chat') ...[
-            GestureDetector(
-              onTap: () => context.go("/sessions"),
-              child: const Icon(Icons.list_outlined, color: OpenCodeTheme.text),
-            ),
-            const SizedBox(width: 20),
-            GestureDetector(
-              onTap: () => _onNewSessionPressed(context),
-              child: const Icon(Icons.create_outlined,
-                  color: OpenCodeTheme.text),
-            ),
-          ],
-          const Spacer(),
-          if (currentLocation == '/settings') ...[
-            GestureDetector(
-              onTap: () => _showAddInstanceDialog(context),
-              child: const Icon(Icons.add, color: OpenCodeTheme.text),
-            ),
-          ],
-          if (currentLocation == '/chat' || currentLocation == '/sessions')
-            GestureDetector(
-                onTap: () => context.go("/settings"),
-                child: const Icon(Icons.settings, color: OpenCodeTheme.text)),
-        ],
-      ),
+    return BlocBuilder<ConnectionBloc, connection_states.ConnectionState>(
+      builder: (context, connectionState) {
+        return Container(
+          height: 60,
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          decoration: const BoxDecoration(
+            color: OpenCodeTheme.surface,
+          ),
+          child: Row(
+            children: [
+              if (currentLocation == '/settings') ...[
+                GestureDetector(
+                    onTap: () => SessionValidator.navigateToChat(context),
+                    child: const Icon(Icons.arrow_left, color: OpenCodeTheme.text)),
+              ],
+              if (currentLocation == '/sessions') ...[
+                GestureDetector(
+                    onTap: () => SessionValidator.navigateToChat(context),
+                    child: const Icon(Icons.arrow_left, color: OpenCodeTheme.text)),
+              ],
+              if (currentLocation == '/provider-list') ...[
+                GestureDetector(
+                    onTap: () => SessionValidator.navigateToChat(context),
+                    child: const Icon(Icons.arrow_left, color: OpenCodeTheme.text)),
+              ],
+              if (currentLocation == '/chat') ...[
+                GestureDetector(
+                  onTap: () => context.go("/sessions"),
+                  child: const Icon(Icons.list_outlined, color: OpenCodeTheme.text),
+                ),
+                const SizedBox(width: 20),
+                GestureDetector(
+                  onTap: () => _onNewSessionPressed(context),
+                  child: const Icon(Icons.create_outlined,
+                      color: OpenCodeTheme.text),
+                ),
+              ],
+              const Spacer(),
+              if (currentLocation == '/settings') ...[
+                GestureDetector(
+                  onTap: () => _showAddInstanceDialog(context),
+                  child: const Icon(Icons.add, color: OpenCodeTheme.text),
+                ),
+              ],
+              if (currentLocation == '/chat' || currentLocation == '/sessions')
+                GestureDetector(
+                    onTap: () => context.go("/settings"),
+                    child: const Icon(Icons.settings, color: OpenCodeTheme.text)),
+            ],
+          ),
+        );
+      },
     );
   }
 }
