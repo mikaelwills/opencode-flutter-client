@@ -64,12 +64,15 @@ class _PromptFieldState extends State<PromptField> {
   }
 
   void _sendMessage() {
+    // Dismiss keyboard immediately when send is pressed
+    FocusScope.of(context).unfocus();
+
     // Block sending if already sending a message
     final chatBloc = context.read<ChatBloc>();
     if (chatBloc.state is ChatSendingMessage) {
       return; // Silently block duplicate sends
     }
-    
+
     final message = _controller.text.trim();
     if (message.isNotEmpty && widget.onSendMessage != null) {
       widget.onSendMessage!(message);
