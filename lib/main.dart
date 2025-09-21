@@ -14,6 +14,11 @@ import 'blocs/chat/chat_bloc.dart';
 import 'blocs/config/config_cubit.dart';
 import 'blocs/config/config_state.dart';
 import 'blocs/instance/instance_bloc.dart';
+import 'blocs/obsidian_instance/obsidian_instance_bloc.dart';
+import 'blocs/obsidian_connection/obsidian_connection_cubit.dart';
+import 'blocs/notes_bloc.dart';
+import 'services/notes_service.dart';
+import 'config/notes_config.dart';
 import 'router/app_router.dart';
 import 'config/opencode_config.dart';
 
@@ -23,21 +28,28 @@ void main() async {
   // Create and initialize ConfigCubit
   final configCubit = ConfigCubit();
   await configCubit.initialize();
-  
+
   // Set the cubit for backward compatibility
   OpenCodeConfig.setConfigCubit(configCubit);
 
+  await NotesConfig.initializeWithDefaults();
+
+  final notesBaseUrl = await NotesConfig.baseUrl;
+  final notesApiKey = await NotesConfig.apiKey;
+  final notesService = NotesService(
+    baseUrl: notesBaseUrl,
+    apiKey: notesApiKey ?? 'd8c56f738e76182b8963ff34ca9dd4c4a76b40e00da2371cda90a26a551c4b8b',
+  );
+
   final openCodeClient = OpenCodeClient();
-  
+
   // Apply saved provider/model settings if available
   final configState = configCubit.state;
-  if (configState is ConfigLoaded && 
-      configState.selectedProviderID != null && 
+  if (configState is ConfigLoaded &&
+      configState.selectedProviderID != null &&
       configState.selectedModelID != null) {
     openCodeClient.setProvider(
-      configState.selectedProviderID!, 
-      configState.selectedModelID!
-    );
+        configState.selectedProviderID!, configState.selectedModelID!);
   }
 
   // Create SessionBloc and initialize with stored session
@@ -45,9 +57,10 @@ void main() async {
   sessionBloc.add(LoadStoredSession());
 
   runApp(OpenCodeApp(
-    openCodeClient: openCodeClient, 
+    openCodeClient: openCodeClient,
     configCubit: configCubit,
     sessionBloc: sessionBloc,
+    notesService: notesService,
   ));
 }
 
@@ -55,12 +68,14 @@ class OpenCodeApp extends StatelessWidget {
   final OpenCodeClient openCodeClient;
   final ConfigCubit configCubit;
   final SessionBloc sessionBloc;
+  final NotesService notesService;
 
   const OpenCodeApp({
-    super.key, 
+    super.key,
     required this.openCodeClient,
     required this.configCubit,
     required this.sessionBloc,
+    required this.notesService,
   });
 
   @override
@@ -99,15 +114,30 @@ class OpenCodeApp extends StatelessWidget {
                 openCodeClient: context.read<OpenCodeClient>(),
                 messageQueueService: context.read<MessageQueueService>(),
               );
-              
+
               // Initialize the MessageQueueService's ChatBloc listener
-              context.read<MessageQueueService>().initChatBlocListener(chatBloc);
-              
+              context
+                  .read<MessageQueueService>()
+                  .initChatBlocListener(chatBloc);
+
               return chatBloc;
             },
           ),
           BlocProvider<InstanceBloc>(
             create: (context) => InstanceBloc(),
+          ),
+          BlocProvider<ObsidianInstanceBloc>(
+            create: (context) => ObsidianInstanceBloc(),
+          ),
+          BlocProvider<ObsidianConnectionCubit>(
+            create: (context) => ObsidianConnectionCubit(),
+          ),
+          BlocProvider<NotesBloc>(
+            create: (context) {
+              final notesBloc = NotesBloc(notesService);
+              notesBloc.add(InitializeNotes());
+              return notesBloc;
+            },
           ),
         ],
         child: Container(
@@ -125,5 +155,3 @@ class OpenCodeApp extends StatelessWidget {
     );
   }
 }
-
-

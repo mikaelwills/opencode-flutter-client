@@ -37,7 +37,6 @@ class NetworkService {
       final previousStatus = _currentStatus;
       _currentStatus = newStatus;
       
-      print('📶 [NetworkService] Status changed: ${previousStatus?.name ?? 'unknown'} → ${newStatus.name}');
       _networkController.add(newStatus);
     }
   }

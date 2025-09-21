@@ -46,13 +46,13 @@ class _SessionsScreenState extends State<SessionsScreen> {
                   Icon(
                     Icons.error_outline,
                     size: 64,
-                    color: OpenCodeTheme.text.withOpacity(0.6),
+                    color: OpenCodeTheme.text.withValues(alpha: 0.6),
                   ),
                   const SizedBox(height: 16),
                   Text(
                     'Failed to load sessions',
                     style: TextStyle(
-                      color: OpenCodeTheme.text.withOpacity(0.8),
+                      color: OpenCodeTheme.text.withValues(alpha: 0.8),
                       fontSize: 18,
                       fontWeight: FontWeight.w500,
                     ),
@@ -61,7 +61,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
                   Text(
                     state.message,
                     style: TextStyle(
-                      color: OpenCodeTheme.text.withOpacity(0.6),
+                      color: OpenCodeTheme.text.withValues(alpha: 0.6),
                       fontSize: 14,
                     ),
                     textAlign: TextAlign.center,
@@ -91,13 +91,13 @@ class _SessionsScreenState extends State<SessionsScreen> {
                     Icon(
                       Icons.chat_bubble_outline,
                       size: 64,
-                      color: OpenCodeTheme.text.withOpacity(0.6),
+                      color: OpenCodeTheme.text.withValues(alpha: 0.6),
                     ),
                     const SizedBox(height: 16),
                     Text(
                       'No sessions yet',
                       style: TextStyle(
-                        color: OpenCodeTheme.text.withOpacity(0.8),
+                        color: OpenCodeTheme.text.withValues(alpha: 0.8),
                         fontSize: 18,
                         fontWeight: FontWeight.w500,
                       ),
@@ -106,7 +106,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
                     Text(
                       'Start a new conversation to create your first session',
                       style: TextStyle(
-                        color: OpenCodeTheme.text.withOpacity(0.6),
+                        color: OpenCodeTheme.text.withValues(alpha: 0.6),
                         fontSize: 14,
                       ),
                       textAlign: TextAlign.center,
@@ -223,14 +223,14 @@ class _SessionsScreenState extends State<SessionsScreen> {
           ),
           content: Text(
             'Are you sure you want to delete this session? This action cannot be undone.',
-            style: TextStyle(color: OpenCodeTheme.text.withOpacity(0.8)),
+            style: TextStyle(color: OpenCodeTheme.text.withValues(alpha: 0.8)),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
               child: Text(
                 'Cancel',
-                style: TextStyle(color: OpenCodeTheme.text.withOpacity(0.6)),
+                style: TextStyle(color: OpenCodeTheme.text.withValues(alpha: 0.6)),
               ),
             ),
             TextButton(
@@ -337,14 +337,14 @@ class SessionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      color: isCurrentSession ? OpenCodeTheme.primary.withOpacity(0.1) : OpenCodeTheme.surface,
+      color: isCurrentSession ? OpenCodeTheme.primary.withValues(alpha: 0.1) : OpenCodeTheme.surface,
       elevation: isCurrentSession ? 4 : 1,
       margin: const EdgeInsets.only(bottom: 12),
       child: Container(
         decoration: isCurrentSession 
           ? BoxDecoration(
               border: Border.all(
-                color: OpenCodeTheme.primary.withOpacity(0.3),
+                color: OpenCodeTheme.primary.withValues(alpha: 0.3),
                 width: 1,
               ),
               borderRadius: BorderRadius.circular(8),
@@ -385,13 +385,13 @@ class SessionCard extends StatelessWidget {
                         Icon(
                           Icons.access_time,
                           size: 14,
-                          color: OpenCodeTheme.text.withOpacity(0.6),
+                          color: OpenCodeTheme.text.withValues(alpha: 0.6),
                         ),
                         const SizedBox(width: 4),
                         Text(
                           _formatDateTime(session.lastUpdated),
                           style: TextStyle(
-                            color: OpenCodeTheme.text.withOpacity(0.6),
+                            color: OpenCodeTheme.text.withValues(alpha: 0.6),
                             fontSize: 12,
                           ),
                         ),
@@ -402,7 +402,7 @@ class SessionCard extends StatelessWidget {
                             height: 12,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              color: OpenCodeTheme.primary.withOpacity(0.6),
+                              color: OpenCodeTheme.primary.withValues(alpha: 0.6),
                             ),
                           ),
                         ],

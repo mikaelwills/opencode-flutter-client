@@ -6,7 +6,6 @@ import 'package:opencode_flutter_client/blocs/chat/chat_state.dart';
 import '../theme/opencode_theme.dart';
 import '../blocs/connection/connection_bloc.dart';
 import '../blocs/connection/connection_state.dart' as connection_states;
-import '../blocs/connection/connection_event.dart';
 import '../blocs/config/config_cubit.dart';
 import '../blocs/config/config_state.dart';
 import '../services/network_service.dart';

@@ -20,11 +20,9 @@ class MessagePartWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final content = part.content;
     final contentPreview = content != null ? (content.length > 50 ? '${content.substring(0, 50)}...' : content) : 'null';
-    print('🔍 [MessagePartWidget] Building part: type="${part.type}", content="$contentPreview"');
     
     switch (part.type) {
       case 'text':
-        print('🔍 [MessagePartWidget] Building TEXT part with content: "${part.content}"');
         return _buildTextPart();
       case 'tool':
         return _buildToolPart();
@@ -33,20 +31,16 @@ class MessagePartWidget extends StatelessWidget {
       case 'plan-options':
         return _buildPlanOptionsPart();
       case 'step-start':
-        print('🔍 [MessagePartWidget] Hiding STEP-START part');
         return const SizedBox.shrink();
       case 'step-finish':
-        print('🔍 [MessagePartWidget] Hiding STEP-FINISH part');
         return const SizedBox.shrink();
       default:
-        print('🔍 [MessagePartWidget] Unknown part type "${part.type}", treating as text');
         return _buildTextPart();
     }
   }
 
   Widget _buildTextPart() {
     final content = part.content ?? '';
-    print('🔍 [MessagePartWidget] _buildTextPart called with content: "$content"');
     
     if (content.isEmpty) {
       print('❌ [MessagePartWidget] Text part has empty content!');

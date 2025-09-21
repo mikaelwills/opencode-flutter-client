@@ -149,7 +149,7 @@ class _StreamingTextState extends State<StreamingText> {
               child: Text(
                 '▊',
                 style: widget.style?.copyWith(
-                  color: widget.style?.color?.withOpacity(0.7),
+                  color: widget.style?.color?.withValues(alpha: 0.7),
                 ),
               ),
             ),
@@ -168,7 +168,7 @@ class _StreamingTextState extends State<StreamingText> {
             TextSpan(
               text: '▊',
               style: widget.style?.copyWith(
-                color: widget.style?.color?.withOpacity(0.7),
+                color: widget.style?.color?.withValues(alpha: 0.7),
               ),
             ),
         ],

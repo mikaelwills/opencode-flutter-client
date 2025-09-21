@@ -15,11 +15,6 @@ class MessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    print('🔍 [MessageBubble] Building message bubble');
-    print('🔍 [MessageBubble] Message ID: ${message.id}');
-    print('🔍 [MessageBubble] Message role: ${message.role}');
-    print('🔍 [MessageBubble] Message parts: ${message.parts.length}');
-    print('🔍 [MessageBubble] Is streaming: $isStreaming');
     
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 4),
@@ -50,7 +45,6 @@ class MessageBubble extends StatelessWidget {
           // Assistant message parts
           if (message.role == 'assistant') ...[
             ...message.parts.map((part) {
-              print('🔍 [MessageBubble] Creating MessagePartWidget for part: ${part.type}');
               return MessagePartWidget(
                 part: part,
                 isStreaming: isStreaming && part == message.parts.last,

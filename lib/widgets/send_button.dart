@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../theme/opencode_theme.dart';
 
 class SendButton extends StatelessWidget {
   final VoidCallback onPressed;

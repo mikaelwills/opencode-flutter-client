@@ -119,10 +119,8 @@ class MessageQueueService {
   /// Initialize listeners for connection and session state changes
   void _initConnectionListener() {
     _connectionSubscription = connectionBloc.stream.listen((connectionState) {
-      print('📬 [MessageQueue] Connection state: ${connectionState.runtimeType}');
       
       if (connectionState is Connected) {
-        print('📬 [MessageQueue] Connected - processing ${_messageQueue.length} queued messages');
         _processQueue();
       }
     });
@@ -196,7 +194,6 @@ class MessageQueueService {
   /// Process all queued messages when connection is restored
   Future<void> _processQueue() async {
     if (_messageQueue.isEmpty) {
-      print('📬 [MessageQueue] No messages in queue to process');
       return;
     }
 

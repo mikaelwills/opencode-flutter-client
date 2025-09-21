@@ -6,7 +6,16 @@
       "mcp__obsidian-vault__view",
       "mcp__obsidian-vault__str_replace",
       "Bash(grep:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(ssh:*)",
+      "WebFetch(domain:github.com)",
+      "Read(//Users/mikaelwills/**)",
+      "Bash(curl:*)",
+      "mcp__n8n-mcp__get_database_statistics",
+      "mcp__n8n-mcp__list_tasks",
+      "mcp__n8n-mcp__get_node_for_task",
+      "mcp__n8n-mcp__tools_documentation",
+      "mcp__sequential-thinking__sequentialthinking"
     ],
     "deny": []
   }

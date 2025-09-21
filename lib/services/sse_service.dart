@@ -55,8 +55,6 @@ class SSEService {
               // Only log message.part.updated events content
               if (openCodeEvent.type == 'message.part.updated') {
                 final text = openCodeEvent.data?['properties']?['part']?['text'] ?? '';
-                print('💬 message.part.updated | ${openCodeEvent.sessionId?.substring(0, 8) ?? 'null'}');
-                print('   "${text.toString().length > 50 ? '${text.toString().substring(0, 50)}...' : text}"');
               }
               
               if (_eventController?.isClosed == false) {
@@ -111,7 +109,6 @@ class SSEService {
   /// Restart the SSE connection with fresh URL from config
   /// This properly cleans up the old connection and establishes a new one
   void restartConnection() {
-    print('🔄 [SSEService] Restarting SSE connection...');
     
     // Clean up existing connection
     _reconnectTimer?.cancel();
@@ -127,7 +124,6 @@ class SSEService {
     _reconnectAttempts = 0;
     _eventController = null;
     
-    print('🔄 [SSEService] Old connection cleaned up, establishing new connection...');
   }
 
   // Fast path for text streaming - optimized for message.part.updated events

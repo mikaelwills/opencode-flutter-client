@@ -140,7 +140,7 @@ class TerminalIPInput extends StatelessWidget {
           style: TextStyle(
             fontFamily: 'FiraCode',
             fontSize: 12,
-            color: OpenCodeTheme.text.withOpacity(0.7),
+            color: OpenCodeTheme.text.withValues(alpha: 0.7),
             height: 1.2,
           ),
           maxLines: 1,
@@ -236,13 +236,13 @@ class TerminalIPInput extends StatelessWidget {
       decoration: BoxDecoration(
         color: OpenCodeTheme.background,
         border: Border.all(
-          color: OpenCodeTheme.primary.withOpacity(0.35),
+          color: OpenCodeTheme.primary.withValues(alpha: 0.35),
           width: 1,
         ),
         borderRadius: BorderRadius.circular(4),
         boxShadow: [
           BoxShadow(
-            color: OpenCodeTheme.primary.withOpacity(0.1),
+            color: OpenCodeTheme.primary.withValues(alpha: 0.1),
             blurRadius: 4,
             spreadRadius: 0,
           ),
@@ -253,8 +253,8 @@ class TerminalIPInput extends StatelessWidget {
         child: InkWell(
           onTap: isConnecting ? null : onConnect,
           borderRadius: BorderRadius.circular(4),
-          splashColor: OpenCodeTheme.primary.withOpacity(0.1),
-          highlightColor: OpenCodeTheme.primary.withOpacity(0.05),
+          splashColor: OpenCodeTheme.primary.withValues(alpha: 0.1),
+          highlightColor: OpenCodeTheme.primary.withValues(alpha: 0.05),
           child: Center(
             child: isConnecting
                 ? const SizedBox(
@@ -285,13 +285,13 @@ class TerminalIPInput extends StatelessWidget {
       decoration: BoxDecoration(
         color: OpenCodeTheme.background,
         border: Border.all(
-          color: OpenCodeTheme.text.withOpacity(0.35),
+          color: OpenCodeTheme.text.withValues(alpha: 0.35),
           width: 1,
         ),
         borderRadius: BorderRadius.circular(4),
         boxShadow: [
           BoxShadow(
-            color: OpenCodeTheme.text.withOpacity(0.1),
+            color: OpenCodeTheme.text.withValues(alpha: 0.1),
             blurRadius: 4,
             spreadRadius: 0,
           ),
@@ -302,13 +302,13 @@ class TerminalIPInput extends StatelessWidget {
         child: InkWell(
           onTap: onEdit,
           borderRadius: BorderRadius.circular(4),
-          splashColor: OpenCodeTheme.text.withOpacity(0.1),
-          highlightColor: OpenCodeTheme.text.withOpacity(0.05),
+          splashColor: OpenCodeTheme.text.withValues(alpha: 0.1),
+          highlightColor: OpenCodeTheme.text.withValues(alpha: 0.05),
           child: Center(
             child: Icon(
               Icons.edit_outlined,
               size: 18,
-              color: OpenCodeTheme.text.withOpacity(0.7),
+              color: OpenCodeTheme.text.withValues(alpha: 0.7),
             ),
           ),
         ),

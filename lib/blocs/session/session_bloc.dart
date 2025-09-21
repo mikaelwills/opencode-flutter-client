@@ -31,7 +31,6 @@ class SessionBloc extends Bloc<SessionEvent, SessionState> {
   ) async {
     // Prevent concurrent session creation
     if (_isCreatingSession) {
-      print('🔍 [SessionBloc] Session creation already in progress, skipping duplicate request');
       return;
     }
 
@@ -40,7 +39,6 @@ class SessionBloc extends Bloc<SessionEvent, SessionState> {
 
     try {
       final session = await openCodeClient.createSession();
-      print('✅ Session created: ${session.id}');
 
       _currentSession = session;
       await _persistCurrentSessionId(session.id);
@@ -85,7 +83,6 @@ class SessionBloc extends Bloc<SessionEvent, SessionState> {
 
     try {
       await openCodeClient.sendMessage(event.sessionId, event.message);
-      print('📤 Message sent');
 
       // Update session to active state
       final updatedSession = _currentSession!.copyWith(
@@ -142,10 +139,8 @@ class SessionBloc extends Bloc<SessionEvent, SessionState> {
     try {
       final storedSessionId = await _getStoredSessionId();
       if (storedSessionId != null) {
-        print('🔍 Found stored session ID: $storedSessionId');
         add(ValidateSession(storedSessionId));
       } else {
-        print('🔍 No stored session found, creating new session');
         _safelyCreateSession();
       }
     } catch (e) {
@@ -170,17 +165,14 @@ class SessionBloc extends Bloc<SessionEvent, SessionState> {
       }
       
       if (session != null) {
-        print('✅ Session validated: ${session.id}');
         _currentSession = session;
         emit(SessionLoaded(session: session));
       } else {
-        print('❌ Session not found on server: ${event.sessionId}');
         emit(SessionNotFound(event.sessionId));
         await _clearStoredSessionId();
         _safelyCreateSession();
       }
     } catch (e) {
-      print('❌ [SessionBloc] Failed to validate session: $e');
       emit(SessionNotFound(event.sessionId));
       await _clearStoredSessionId();
       _safelyCreateSession();
@@ -204,7 +196,6 @@ class SessionBloc extends Bloc<SessionEvent, SessionState> {
         _currentSession = session;
         await _persistCurrentSessionId(session.id);
         emit(SessionLoaded(session: session));
-        print('✅ Current session set to: ${session.id}');
       } else {
         emit(SessionError('Session not found: ${event.sessionId}'));
       }
@@ -219,37 +210,28 @@ class SessionBloc extends Bloc<SessionEvent, SessionState> {
   /// Send message directly without using events - for MessageQueueService
   /// Returns Future that completes on success or throws on error
   Future<void> sendMessageDirect(String sessionId, String message) async {
-    final displayMessage = message.length > 50 ? '${message.substring(0, 50)}...' : message;
-    print('🔐 [SessionBloc] sendMessageDirect called for session $sessionId, message: "$displayMessage"');
     
     // Same validation logic as _onSendMessage
     if (sessionId.trim().isEmpty) {
-      print('❌ [SessionBloc] Validation failed: empty session ID');
       throw Exception('Invalid session ID');
     }
 
     if (message.trim().isEmpty) {
-      print('❌ [SessionBloc] Validation failed: empty message');
       throw Exception('Message cannot be empty');
     }
 
     if (_currentSession == null) {
-      print('❌ [SessionBloc] Validation failed: no active session');
       throw Exception('No active session to send message');
     }
 
     // Validate session ID matches current session
     if (_currentSession!.id != sessionId) {
-      print('❌ [SessionBloc] Validation failed: session mismatch (expected: ${_currentSession!.id}, got: $sessionId)');
       throw Exception(
           'Session ID mismatch: expected ${_currentSession!.id}, got $sessionId');
     }
 
-    print('✅ [SessionBloc] Validation passed - calling OpenCodeClient.sendMessage');
-
     try {
       await openCodeClient.sendMessage(sessionId, message);
-      print('✅ [SessionBloc] OpenCodeClient.sendMessage completed successfully');
 
       // Update session to active state (same as event handler)
       final updatedSession = _currentSession!.copyWith(
@@ -257,13 +239,11 @@ class SessionBloc extends Bloc<SessionEvent, SessionState> {
         lastActivity: DateTime.now(),
       );
       _currentSession = updatedSession;
-      print('📤 [SessionBloc] Session updated to active state');
 
       // Note: No state emission - this is for direct calls only
       // The MessageQueueService will handle status via callbacks
-      
+
     } catch (e) {
-      print('❌ [SessionBloc] OpenCodeClient.sendMessage failed: ${e.runtimeType}: $e');
       rethrow; // Re-throw for MessageQueueService to handle
     }
   }
@@ -272,9 +252,8 @@ class SessionBloc extends Bloc<SessionEvent, SessionState> {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_currentSessionKey, sessionId);
-      print('💾 Session ID persisted: $sessionId');
     } catch (e) {
-      print('❌ Failed to persist session ID: $e');
+      print('Failed to persist session ID: $e');
     }
   }
 
@@ -283,7 +262,6 @@ class SessionBloc extends Bloc<SessionEvent, SessionState> {
       final prefs = await SharedPreferences.getInstance();
       return prefs.getString(_currentSessionKey);
     } catch (e) {
-      print('❌ Failed to get stored session ID: $e');
       return null;
     }
   }
@@ -292,9 +270,8 @@ class SessionBloc extends Bloc<SessionEvent, SessionState> {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_currentSessionKey);
-      print('🗑️ Stored session ID cleared');
     } catch (e) {
-      print('❌ Failed to clear stored session ID: $e');
+      print('Failed to clear stored session ID: $e');
     }
   }
 
@@ -302,8 +279,6 @@ class SessionBloc extends Bloc<SessionEvent, SessionState> {
   void _safelyCreateSession() {
     if (!_isCreatingSession) {
       add(CreateSession());
-    } else {
-      print('🔍 [SessionBloc] Session creation already in progress, skipping additional request');
     }
   }
 }

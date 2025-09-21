@@ -114,7 +114,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     listener: (context, connectionState) {
                       // Auto-navigate to ChatScreen when session is ready
                       if (connectionState is connection_states.Connected) {
-                        print('🔍 [HomeScreen] Auto-navigating to ChatScreen - connection established');
                         SessionValidator.navigateToChat(context);
                       }
                     },

@@ -5,6 +5,8 @@ import '../screens/chat_screen.dart';
 import '../screens/sessions_screen.dart';
 import '../screens/settings_screen.dart';
 import '../screens/provider_list_screen.dart';
+import '../screens/notes_list_screen.dart';
+import '../screens/note_screen.dart';
 import '../widgets/main_scaffold.dart';
 
 final GoRouter appRouter = GoRouter(
@@ -53,6 +55,29 @@ final GoRouter appRouter = GoRouter(
             child: const ProviderListScreen(),
           ),
         ),
+        GoRoute(
+          path: '/notes',
+          name: 'notes',
+          pageBuilder: (context, state) => _buildFadeTransitionPage(
+            key: state.pageKey,
+            child: const NotesListScreen(),
+          ),
+        ),
+        GoRoute(
+          path: '/notes/:path',
+          name: 'note',
+          pageBuilder: (context, state) {
+            final path = state.pathParameters['path']!;
+            final isNewNote = state.uri.queryParameters['new'] == 'true';
+            return _buildFadeTransitionPage(
+              key: state.pageKey,
+              child: NoteScreen(
+                notePath: path,
+                isNewNote: isNewNote,
+              ),
+            );
+          },
+        ),
       ],
     ),
   ],
@@ -79,4 +104,5 @@ CustomTransitionPage<void> _buildFadeTransitionPage({
     },
   );
 }
+
 

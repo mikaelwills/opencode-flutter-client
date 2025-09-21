@@ -150,13 +150,13 @@ class _TerminalButtonState extends State<TerminalButton>
             decoration: BoxDecoration(
               color: OpenCodeTheme.background,
               border: Border.all(
-                color: _borderColor.withOpacity(_isHovered ? 0.5 : 0.35),
+                color: _borderColor.withValues(alpha: _isHovered ? 0.5 : 0.35),
                 width: _isHovered ? 2 : 1,
               ),
               borderRadius: BorderRadius.circular(4),
               boxShadow: [
                 BoxShadow(
-                  color: _borderColor.withOpacity(
+                  color: _borderColor.withValues(alpha:
                     _isHovered ? _glowAnimation.value * 0.3 : 0.1,
                   ),
                   blurRadius: _isHovered ? 8 : 4,
@@ -169,8 +169,8 @@ class _TerminalButtonState extends State<TerminalButton>
               child: InkWell(
                 onTap: widget.onPressed,
                 borderRadius: BorderRadius.circular(4),
-                splashColor: _borderColor.withOpacity(0.1),
-                highlightColor: _borderColor.withOpacity(0.05),
+                splashColor: _borderColor.withValues(alpha: 0.1),
+                highlightColor: _borderColor.withValues(alpha: 0.05),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Row(

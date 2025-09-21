@@ -240,7 +240,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
                       child: Text(
                         'and ${instanceState.instances.length - 3} more in settings...',
                         style: TextStyle(
-                          color: OpenCodeTheme.text.withOpacity(0.6),
+                          color: OpenCodeTheme.text.withValues(alpha: 0.6),
                           fontSize: 12,
                         ),
                       ),
@@ -252,7 +252,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
                   Text(
                     'Or connect manually:',
                     style: TextStyle(
-                      color: OpenCodeTheme.text.withOpacity(0.8),
+                      color: OpenCodeTheme.text.withValues(alpha: 0.8),
                       fontSize: 14,
                     ),
                   ),
@@ -396,7 +396,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
               Text(
                 'Save "$_savedIP:$_savedPort" as an instance for quick access.',
                 style: TextStyle(
-                  color: OpenCodeTheme.text.withOpacity(0.7),
+                  color: OpenCodeTheme.text.withValues(alpha: 0.7),
                   fontSize: 14,
                 ),
               ),

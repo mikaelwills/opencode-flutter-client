@@ -22,7 +22,7 @@ class CancelButton extends StatelessWidget {
       color: OpenCodeTheme.error,
       tooltip: 'Cancel operation (^C)',
       style: IconButton.styleFrom(
-        backgroundColor: OpenCodeTheme.error.withOpacity(0.1),
+        backgroundColor: OpenCodeTheme.error.withValues(alpha: 0.1),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
         ),

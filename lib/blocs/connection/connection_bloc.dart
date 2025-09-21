@@ -61,16 +61,12 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionState> {
     
     // Listen for network status changes
     _networkSubscription = _networkService.networkStatusStream.listen((networkStatus) {
-      print('📶 [ConnectionBloc] Network status changed: ${networkStatus.displayName}');
-      
       if (!networkStatus.isConnected) {
         // Immediate signal loss detection
-        print('📶 [ConnectionBloc] Network lost - triggering immediate signal loss');
         add(NetworkSignalLost(reason: 'Network signal lost (${networkStatus.displayName})'));
       } else {
         // Network restored - trigger fast reconnection if we're currently disconnected
         if (state is Disconnected || state is Reconnecting) {
-          print('📶 [ConnectionBloc] Network restored - triggering fast reconnection');
           add(NetworkRestored(networkType: networkStatus.displayName));
         }
       }
@@ -123,22 +119,17 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionState> {
       
       if (isReachable) {
         if (state is! Connected) {
-          print('🔍 [Connection] Ping successful - connection established');
           await _handleConnectionEstablished(emit);
-        } else {
-          print('🔍 [Connection] Ping successful - connection active');
         }
       } else {
         _handleConnectionLost('Server unreachable', emit);
       }
     } on TimeoutException {
-      final timeoutMsg = _isFastReconnectMode 
-          ? 'Fast reconnect timeout' 
+      final timeoutMsg = _isFastReconnectMode
+          ? 'Fast reconnect timeout'
           : 'Connection timeout';
-      print('❌ [Connection] Ping timeout: $timeoutMsg');
       _handleConnectionLost(timeoutMsg, emit);
     } catch (e) {
-      print('❌ [Connection] Ping failed: $e');
       _handleConnectionLost(e.toString(), emit);
     }
   }
@@ -154,11 +145,8 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionState> {
     _currentEmitter = emit;
     try {
       // Fetch config to get provider and model information with timeout
-      print('🔍 [Connection] Fetching server config...');
       await openCodeClient.getProviders()
           .timeout(const Duration(seconds: 15));
-      print(
-          '✅ [Connection] Config fetched successfully - Provider: ${openCodeClient.providerID}, Model: ${openCodeClient.modelID}');
 
       _reconnectAttempt = 0;
       _isFastReconnectMode = false; // Disable fast reconnect mode on successful connection
@@ -166,15 +154,11 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionState> {
       _cancelReconnectTimer();
 
       // Connection is established - handle session appropriately
-      print('🔍 [Connection] Connection established');
-      
       if (sessionBloc.currentSession != null) {
         // Reconnection scenario - validate existing session
-        print('🔄 [Connection] Reconnection detected, validating existing session: ${sessionBloc.currentSession!.id}');
         sessionBloc.add(session_events.ValidateSession(sessionBloc.currentSession!.id));
       } else {
         // Initial connection - load stored session (validates or creates new)
-        print('🆕 [Connection] Initial connection, loading stored session');
         sessionBloc.add(session_events.LoadStoredSession());
       }
       
@@ -203,10 +187,8 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionState> {
           .timeout(const Duration(seconds: 20));
           
     } on TimeoutException {
-      print('❌ [Connection] Connection establishment timeout');
       _handleConnectionLost('Connection establishment timeout', emit);
     } catch (e) {
-      print('❌ [Connection] Failed to establish connection: $e');
       _handleConnectionLost(e.toString(), emit);
     }
   }
@@ -246,11 +228,8 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionState> {
   void _startFastReconnection() {
     final delay = _fastReconnectDelays[_fastReconnectAttempt];
     _fastReconnectAttempt++;
-    
-    print('🔍 [Connection] Fast reconnect attempt $_fastReconnectAttempt in ${delay.inMilliseconds}ms');
-    
+
     _reconnectTimer = Timer(delay, () {
-      print('🔍 [Connection] Fast reconnect timer fired, checking connection');
       add(CheckConnection());
     });
   }
@@ -262,18 +241,12 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionState> {
   
     _reconnectAttempt = event.attempt;
     emit(Reconnecting(attempt: _reconnectAttempt));
-    print(
-        '🔍 [ConnectionBloc] Emitted Reconnecting state (attempt $_reconnectAttempt)');
 
     // Schedule next connection check with improved exponential backoff
     final delaySeconds = math.pow(2, _reconnectAttempt).toInt().clamp(1, 120); // Increased max to 2 minutes
     final delay = Duration(seconds: delaySeconds);
 
-    print(
-        '🔍 [ConnectionBloc] Scheduling next connection check in ${delay.inSeconds} seconds');
-
     _reconnectTimer = Timer(delay, () {
-      print('🔍 [ConnectionBloc] Reconnect timer fired, checking connection');
       add(CheckConnection());
     });
   }
@@ -299,16 +272,14 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionState> {
     IntentionalDisconnect event,
     Emitter<ConnectionState> emit,
   ) {
-    print('🔍 [Connection] Intentional disconnect: ${event.reason ?? 'User initiated'}');
-    
     // Clean up all timers and subscriptions
     _pingTimer?.cancel();
     _reconnectTimer?.cancel();
     _sessionSubscription?.cancel();
-    
+
     // Reset reconnect attempt counter
     _reconnectAttempt = 0;
-    
+
     // Emit disconnected state without triggering reconnection
     emit(Disconnected(
       reason: event.reason ?? 'User disconnected',
@@ -320,12 +291,10 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionState> {
     NetworkSignalLost event,
     Emitter<ConnectionState> emit,
   ) {
-    print('📶 [Connection] Network signal lost: ${event.reason ?? 'Signal lost'}');
-    
     // Disable fast reconnect mode when signal is lost
     _isFastReconnectMode = false;
     _fastReconnectAttempt = 0;
-    
+
     // Use the existing connection lost handler but with network-specific reason
     _handleConnectionLost(event.reason ?? 'Network signal lost', emit);
   }
@@ -334,16 +303,14 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionState> {
     NetworkRestored event,
     Emitter<ConnectionState> emit,
   ) {
-    print('📶 [Connection] Network restored: ${event.networkType ?? 'Unknown network'}');
-    
     // Enable fast reconnect mode for immediate network restoration
     _isFastReconnectMode = true;
     _fastReconnectAttempt = 0;
     _reconnectAttempt = 0; // Reset normal reconnect attempts
-    
+
     // Cancel any existing reconnect timer
     _cancelReconnectTimer();
-    
+
     // Start immediate fast reconnection
     add(CheckConnection());
   }

@@ -121,13 +121,13 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
             Icon(
               Icons.error_outline,
               size: 64,
-              color: OpenCodeTheme.text.withOpacity(0.6),
+              color: OpenCodeTheme.text.withValues(alpha: 0.6),
             ),
             const SizedBox(height: 16),
             Text(
               'Failed to load providers',
               style: TextStyle(
-                color: OpenCodeTheme.text.withOpacity(0.8),
+                color: OpenCodeTheme.text.withValues(alpha: 0.8),
                 fontSize: 18,
                 fontWeight: FontWeight.w500,
               ),
@@ -136,7 +136,7 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
             Text(
               _error!,
               style: TextStyle(
-                color: OpenCodeTheme.text.withOpacity(0.6),
+                color: OpenCodeTheme.text.withValues(alpha: 0.6),
                 fontSize: 14,
               ),
               textAlign: TextAlign.center,
@@ -163,13 +163,13 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
             Icon(
               Icons.cloud_off,
               size: 64,
-              color: OpenCodeTheme.text.withOpacity(0.6),
+              color: OpenCodeTheme.text.withValues(alpha: 0.6),
             ),
             const SizedBox(height: 16),
             Text(
               'No providers available',
               style: TextStyle(
-                color: OpenCodeTheme.text.withOpacity(0.8),
+                color: OpenCodeTheme.text.withValues(alpha: 0.8),
                 fontSize: 18,
                 fontWeight: FontWeight.w500,
               ),
@@ -218,7 +218,7 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
     final isSelected = _currentProviderID == provider.id && _currentModelID == model.id;
     
     return Card(
-      color: isSelected ? OpenCodeTheme.primary.withOpacity(0.1) : OpenCodeTheme.surface,
+      color: isSelected ? OpenCodeTheme.primary.withValues(alpha: 0.1) : OpenCodeTheme.surface,
       margin: const EdgeInsets.only(bottom: 8),
       child: InkWell(
         onTap: () => _selectProvider(provider.id, model.id),
@@ -244,7 +244,7 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
                       Text(
                         model.description!,
                         style: TextStyle(
-                          color: OpenCodeTheme.text.withOpacity(0.6),
+                          color: OpenCodeTheme.text.withValues(alpha: 0.6),
                           fontSize: 12,
                         ),
                       ),

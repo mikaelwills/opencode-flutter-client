@@ -76,8 +76,6 @@ class OpenCodeClient {
   }
 
   Future<void> getProviders() async {
-    print('🔍 [Connection] Connecting to ${OpenCodeConfig.baseUrl}...');
-
     try {
       final uri = Uri.parse('${OpenCodeConfig.baseUrl}/config');
       final response = await _client.get(
@@ -92,24 +90,20 @@ class OpenCodeClient {
           final parts = modelString.split('/');
           _providerID = parts[0];
           _modelID = parts[1];
-          print('✅ [Connection] Connected to ${OpenCodeConfig.baseUrl} - Provider: $_providerID');
         } else {
           throw Exception('Invalid model format in config: $modelString');
         }
       } else {
-        print('❌ [Connection] Failed to connect to ${OpenCodeConfig.baseUrl} - Status: ${response.statusCode}');
         throw Exception('Failed to get providers: ${response.statusCode}');
       }
     } catch (e) {
-      print('❌ [Connection] Failed to connect to ${OpenCodeConfig.baseUrl} - Error: $e');
-      
       if (e.toString().contains('No route to host') || e.toString().contains('Connection failed')) {
         throw Exception('Cannot connect to OpenCode server at ${OpenCodeConfig.baseUrl}. Please check:\n'
             '1. Tailscale is running and connected\n'
             '2. OpenCode server is running at ${OpenCodeConfig.baseUrl}\n'
             '3. Network connectivity is available');
       }
-      
+
       throw Exception('Failed to get providers: $e');
     }
   }
@@ -124,7 +118,6 @@ class OpenCodeClient {
 
       return response.statusCode == 200;
     } catch (e) {
-      print('❌ [Connection] Ping failed: $e');
       return false;
     }
   }
@@ -140,14 +133,11 @@ class OpenCodeClient {
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body);
         final sessions = data.map((json) => Session.fromJson(json)).toList();
-        print('✅ [OpenCodeClient] Loaded ${sessions.length} sessions');
         return sessions;
       } else {
-        print('❌ [OpenCodeClient] Failed to load sessions: ${response.statusCode}');
         throw Exception('Failed to load sessions: ${response.statusCode}');
       }
     } catch (e) {
-      print('❌ [OpenCodeClient] Get sessions failed with error: $e');
       rethrow;
     }
   }
@@ -166,14 +156,11 @@ class OpenCodeClient {
       if (response.statusCode == 201 || response.statusCode == 200) {
         final sessionData = json.decode(response.body);
         final session = Session.fromJson(sessionData);
-        print('✅ [OpenCodeClient] Created session: ${session.id}');
         return session;
       } else {
-        print('❌ [OpenCodeClient] Failed to create session: ${response.statusCode}');
         throw Exception('Failed to create session: ${response.statusCode}');
       }
     } catch (e) {
-      print('❌ [OpenCodeClient] Create session failed with error: $e');
       rethrow;
     }
   }
@@ -201,22 +188,15 @@ class OpenCodeClient {
         if (messageData.containsKey('name') && messageData.containsKey('data')) {
           final errorName = messageData['name'];
           final errorMessage = messageData['data']['message'];
-          print('❌ [OpenCodeClient] Server returned error in 200 response: $errorName');
           throw Exception('Failed to send message: $errorName - $errorMessage');
         }
 
         final openCodeMessage = OpenCodeMessage.fromApiResponse(messageData);
-        // Only log if there's actual content to show
-        if (openCodeMessage.content.isNotEmpty) {
-          print('✅ [OpenCodeClient] Received response: ${openCodeMessage.content.substring(0, openCodeMessage.content.length > 100 ? 100 : openCodeMessage.content.length)}${openCodeMessage.content.length > 100 ? "..." : ""}');
-        }
         return openCodeMessage;
       } else {
-        print('❌ [OpenCodeClient] Failed to send message: ${response.statusCode}');
         throw Exception('Failed to send message: ${response.statusCode}');
       }
     } catch (e) {
-      print('❌ [OpenCodeClient] Send message failed with error: $e');
       rethrow;
     }
   }
@@ -230,13 +210,11 @@ class OpenCodeClient {
       );
 
       if (response.statusCode == 200) {
-        print('✅ [OpenCodeClient] Aborted session $sessionId');
+        // Success - no logging needed
       } else {
-        print('❌ [OpenCodeClient] Failed to abort session: ${response.statusCode}');
         throw Exception('Failed to abort session: ${response.statusCode}');
       }
     } catch (e) {
-      print('❌ [OpenCodeClient] Abort session failed with error: $e');
       rethrow;
     }
   }
@@ -251,13 +229,11 @@ class OpenCodeClient {
       );
 
       if (response.statusCode == 200 || response.statusCode == 204) {
-        print('✅ [OpenCodeClient] Deleted session $sessionId');
+        // Success - no logging needed
       } else {
-        print('❌ [OpenCodeClient] Failed to delete session: ${response.statusCode}');
         throw Exception('Failed to delete session: ${response.statusCode}');
       }
     } catch (e) {
-      print('❌ [OpenCodeClient] Delete session failed with error: $e');
       rethrow;
     }
   }
@@ -306,7 +282,6 @@ class OpenCodeClient {
           
           return summary;
         } catch (e) {
-          print('❌ [OpenCodeClient] Failed to parse summary response: $e');
           return 'Session ${sessionId.substring(0, 8)}...';
         }
       } else {
@@ -319,11 +294,9 @@ class OpenCodeClient {
           return await _tryAlternativeSummaryFormats(sessionId);
         }
         
-        print('❌ [OpenCodeClient] Failed to generate summary: ${response.statusCode} - ${response.body}');
         throw Exception('Failed to generate summary: ${response.statusCode} - ${response.body}');
       }
     } catch (e) {
-      print('❌ [OpenCodeClient] Generate summary failed with error: $e');
       rethrow;
     }
   }
@@ -396,14 +369,11 @@ class OpenCodeClient {
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body);
         final messages = data.map((json) => OpenCodeMessage.fromApiResponse(json)).toList();
-        print('✅ [OpenCodeClient] Loaded ${messages.length} messages');
         return messages;
       } else {
-        print('❌ [OpenCodeClient] Failed to load messages: ${response.statusCode}');
         throw Exception('Failed to load messages: ${response.statusCode}');
       }
     } catch (e) {
-      print('❌ [OpenCodeClient] Get messages failed with error: $e');
       rethrow;
     }
   }
@@ -419,14 +389,11 @@ class OpenCodeClient {
       if (response.statusCode == 200) {
         final Map<String, dynamic> data = json.decode(response.body);
         final providersResponse = ProvidersResponse.fromJson(data);
-        print('✅ [OpenCodeClient] Loaded ${providersResponse.providers.length} providers');
         return providersResponse;
       } else {
-        print('❌ [OpenCodeClient] Failed to get providers: ${response.statusCode}');
         throw Exception('Failed to get providers: ${response.statusCode}');
       }
     } catch (e) {
-      print('❌ [OpenCodeClient] Get providers failed with error: $e');
       rethrow;
     }
   }
@@ -434,7 +401,6 @@ class OpenCodeClient {
   void setProvider(String providerID, String modelID) {
     _providerID = providerID;
     _modelID = modelID;
-    print('✅ [OpenCodeClient] Provider updated: $providerID/$modelID');
   }
 
   void dispose() {

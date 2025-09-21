@@ -63,7 +63,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
 
     try {
-      print('🔍 [ChatBloc] Loading messages for current session: $currentSessionId');
       
       emit(ChatConnecting());
 
@@ -80,7 +79,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         _messageIndex[message.id] = _messages.length - 1;
       }
       
-      print('🔍 [ChatBloc] Loaded ${messages.length} messages for session $currentSessionId');
 
       // Start listening for new SSE events (without clearing messages)
       _startListening(currentSessionId);
@@ -95,7 +93,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   void _startListening(String sessionId) {
-    print('🔍 [ChatBloc] Starting SSE listener for session: $sessionId');
 
     // Cancel any existing subscription
     _eventSubscription?.cancel();

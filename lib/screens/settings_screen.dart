@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:go_router/go_router.dart';
 import '../utils/session_validator.dart';
 import '../theme/opencode_theme.dart';
@@ -12,10 +11,16 @@ import '../blocs/connection/connection_event.dart';
 import '../blocs/instance/instance_bloc.dart';
 import '../blocs/instance/instance_event.dart';
 import '../blocs/instance/instance_state.dart';
+import '../blocs/obsidian_instance/obsidian_instance_bloc.dart';
+import '../blocs/obsidian_instance/obsidian_instance_event.dart';
+import '../blocs/obsidian_instance/obsidian_instance_state.dart';
+import '../blocs/obsidian_connection/obsidian_connection_cubit.dart';
+import '../blocs/obsidian_connection/obsidian_connection_state.dart' as obsidian_connection_states;
 import '../models/opencode_instance.dart';
+import '../models/obsidian_instance.dart';
 import '../services/sse_service.dart';
 import '../widgets/terminal_button.dart';
-import '../widgets/terminal_ip_input.dart';
+import '../widgets/instance_list_item.dart';
 
 
 class SettingsScreen extends StatefulWidget {
@@ -26,363 +31,70 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  late TextEditingController _ipController;
-  late TextEditingController _portController;
-  bool _isLoading = true;
-
-  String _originalIP = '';
-  int _originalPort = 4096;
 
   @override
   void initState() {
     super.initState();
-    _ipController = TextEditingController();
-    _portController = TextEditingController();
-    _loadCurrentIP();
     context.read<InstanceBloc>().add(LoadInstances());
-
-    // Fallback timeout in case SharedPreferences hangs
-    Future.delayed(const Duration(seconds: 3), () {
-      if (mounted && _isLoading) {
-        _ipController.text = 'localhost';
-        _portController.text = '4096';
-        _originalIP = 'localhost';
-        _originalPort = 4096;
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    });
+    context.read<ObsidianInstanceBloc>().add(LoadObsidianInstances());
   }
 
   @override
   void dispose() {
-    _ipController.dispose();
-    _portController.dispose();
     super.dispose();
   }
 
-  Future<void> _loadCurrentIP() async {
-    try {
-      final configCubit = context.read<ConfigCubit>();
-      final currentState = configCubit.state;
-
-      String savedIP = 'localhost';
-      int savedPort = 4096;
-
-      if (currentState is ConfigLoaded) {
-        savedIP = currentState.serverIp;
-        savedPort = currentState.port;
-      } else {
-        // Fallback to SharedPreferences if cubit state is not loaded
-        final prefs = await SharedPreferences.getInstance();
-        savedIP = prefs.getString('server_ip') ?? 'localhost';
-        savedPort = prefs.getInt('server_port') ?? 4096;
-      }
-
-      if (mounted) {
-        _ipController.text = savedIP;
-        _portController.text = savedPort.toString();
-        _originalIP = savedIP;
-        _originalPort = savedPort;
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      print('Error loading IP and port: $e');
-      // Fallback to default values if loading fails
-      if (mounted) {
-        _ipController.text = 'localhost';
-        _portController.text = '4096';
-        _originalIP = 'localhost';
-        _originalPort = 4096;
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _saveIP() async {
-    final newIP = _ipController.text.trim();
-    final portText = _portController.text.trim();
-
-    if (newIP.isEmpty) return;
-
-    // Parse and validate port
-    int newPort = 4096; // default
-    if (portText.isNotEmpty) {
-      final parsedPort = int.tryParse(portText);
-      if (parsedPort == null || parsedPort < 1 || parsedPort > 65535) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Port must be a number between 1 and 65535'),
-              backgroundColor: OpenCodeTheme.error,
-            ),
-          );
-        }
-        return;
-      }
-      newPort = parsedPort;
-    }
-
-    // Check if IP and port haven't changed
-    if (newIP == _originalIP && newPort == _originalPort) {
-      SessionValidator.navigateToChat(context);
-      return;
-    }
-
-    try {
-      // Update via ConfigCubit (this handles SharedPreferences automatically)
-      final configCubit = context.read<ConfigCubit>();
-      await configCubit.updateServer(newIP, port: newPort);
-
-
-      // Show success message
-      if (mounted) {
-        // Restart SSE service to connect to new server
-        final sseService = context.read<SSEService>();
-        sseService.restartConnection();
-        
-        // Restart ChatBloc SSE subscription to new server
-        final chatBloc = context.read<ChatBloc>();
-        chatBloc.restartSSESubscription();
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Server updated to $newIP:$newPort'),
-            backgroundColor: OpenCodeTheme.success,
-          ),
-        );
-        SessionValidator.navigateToChat(context);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to save server settings: $e'),
-            backgroundColor: OpenCodeTheme.error,
-          ),
-        );
-      }
-    }
-  }
-
-  Future<void> _clearIP() async {
-    try {
-      // Reset ConnectionBloc state
-      if (mounted) {
-        context.read<ConnectionBloc>().add(const IntentionalDisconnect());
-      }
-
-      // Reset via ConfigCubit (this handles SharedPreferences automatically)
-      final configCubit = context.read<ConfigCubit>();
-      await configCubit.resetToDefault();
-
-      // Clear the text fields
-      _ipController.clear();
-      _portController.clear();
-      _originalIP = '';
-      _originalPort = 4096;
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content:
-                Text('IP address cleared. App reset to first-launch state.'),
-            backgroundColor: OpenCodeTheme.warning,
-          ),
-        );
-
-        context.go('/connect');
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to clear IP: $e'),
-            backgroundColor: OpenCodeTheme.error,
-          ),
-        );
-      }
-    }
-  }
 
 
 
   @override
   Widget build(BuildContext context) {
-    return _isLoading
-        ? const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                CircularProgressIndicator(),
-                SizedBox(height: 16),
-                Text(
-                  'Loading settings...',
-                  style: TextStyle(color: OpenCodeTheme.textSecondary),
+    return MultiBlocListener(
+      listeners: [
+        BlocListener<InstanceBloc, InstanceState>(
+          listener: (context, state) {
+            if (state is InstanceError) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(state.message),
+                  backgroundColor: OpenCodeTheme.error,
                 ),
-              ],
-            ),
-          )
-        : BlocListener<InstanceBloc, InstanceState>(
-            listener: (context, state) {
-              if (state is InstanceError) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(state.message),
-                    backgroundColor: OpenCodeTheme.error,
-                  ),
-                );
-              }
-            },
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
+              );
+            }
+          },
+        ),
+        BlocListener<ObsidianInstanceBloc, ObsidianInstanceState>(
+          listener: (context, state) {
+            if (state is ObsidianInstanceError) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(state.message),
+                  backgroundColor: OpenCodeTheme.error,
+                ),
+              );
+            }
+          },
+        ),
+      ],
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  TerminalIPInput.editable(
-                    ipController: _ipController,
-                    portController: _portController,
-                    onConnect: _saveIP,
-                    isConnecting: false,
-                    maxWidth: double.infinity,
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Action Buttons
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TerminalButton(
-                          command: 'disconnect',
-                          type: TerminalButtonType.warning,
-                          onPressed: () {
-                            showDialog(
-                              context: context,
-                              builder: (BuildContext context) {
-                                return AlertDialog(
-                                  backgroundColor: OpenCodeTheme.surface,
-                                  title: const Text(
-                                    'Clear IP Address',
-                                    style: TextStyle(color: OpenCodeTheme.text),
-                                  ),
-                                  content: const Text(
-                                    'This will clear the saved IP address and reset the app to first-launch state. Are you sure?',
-                                    style: TextStyle(
-                                        color: OpenCodeTheme.textSecondary),
-                                  ),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () =>
-                                          Navigator.of(context).pop(),
-                                      child: const Text(
-                                        'Cancel',
-                                        style: TextStyle(
-                                            color: OpenCodeTheme.textSecondary),
-                                      ),
-                                    ),
-                                    TextButton(
-                                      onPressed: () {
-                                        Navigator.of(context).pop();
-                                        _clearIP();
-                                      },
-                                      child: const Text(
-                                        'Clear',
-                                        style: TextStyle(
-                                            color: OpenCodeTheme.error),
-                                      ),
-                                    ),
-                                  ],
-                                );
-                              },
-                            );
-                          },
-                        ),
-                      ),
-
-                    ],
-                  ),
+                  _buildOpenCodeInstancesSection(),
                   const SizedBox(height: 32),
-                  Expanded(
-                    child: BlocBuilder<InstanceBloc, InstanceState>(
-                      builder: (context, state) {
-                        if (state is InstancesLoading) {
-                          return const Center(
-                            child: CircularProgressIndicator(
-                              color: OpenCodeTheme.primary,
-                            ),
-                          );
-                        }
-
-                        if (state is InstancesLoaded) {
-                          if (state.instances.isEmpty) {
-                            return Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.storage_outlined,
-                                    size: 48,
-                                    color: OpenCodeTheme.text.withOpacity(0.6),
-                                  ),
-                                  const SizedBox(height: 16),
-                                  Text(
-                                    'No saved instances',
-                                    style: TextStyle(
-                                      color:
-                                          OpenCodeTheme.text.withOpacity(0.8),
-                                      fontSize: 16,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    'Tap the + button above to add your first instance',
-                                    style: TextStyle(
-                                      color:
-                                          OpenCodeTheme.text.withOpacity(0.6),
-                                      fontSize: 14,
-                                    ),
-                                    textAlign: TextAlign.center,
-                                  ),
-                                ],
-                              ),
-                            );
-                          }
-
-                          return ListView.builder(
-                            itemCount: state.instances.length,
-                            itemBuilder: (context, index) {
-                              final instance = state.instances[index];
-                              final isDeleting = state is InstanceDeleting &&
-                                  state.deletingInstanceId == instance.id;
-
-                              return Container(
-                                margin: const EdgeInsets.only(bottom: 12),
-                                child: TerminalIPInput.instance(
-                                  instance: instance,
-                                  onConnect: () => _connectToInstance(instance),
-                                  onEdit: () => _showEditInstanceDialog(context, instance),
-                                  isConnecting: isDeleting,
-                                  maxWidth: double.infinity,
-                                  tappableForEdit: true, // Enable tap-to-edit
-                                ),
-                              );
-                            },
-                          );
-                        }
-
-                        return const SizedBox.shrink();
-                      },
-                    ),
-                  ),
+                  _buildObsidianInstancesSection(),
                 ],
               ),
             ),
-          );
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _connectToInstance(OpenCodeInstance instance) async {
@@ -396,13 +108,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             port: int.tryParse(instance.port) ?? 4096,
           );
 
-      // Update the UI controllers
-      setState(() {
-        _ipController.text = instance.ip;
-        _portController.text = instance.port;
-        _originalIP = instance.ip;
-        _originalPort = int.tryParse(instance.port) ?? 4096;
-      });
 
       // Trigger connection
       if (mounted) {
@@ -432,9 +137,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  Future<void> _connectToObsidianInstance(ObsidianInstance instance) async {
+    try {
+      // Update last used timestamp
+      context.read<ObsidianInstanceBloc>().add(UpdateObsidianLastUsed(instance.id));
+
+      // Connect to Obsidian instance
+      await context.read<ObsidianConnectionCubit>().connectToInstance(instance);
+
+      if (mounted) {
+        // Navigate to notes screen
+        context.go('/notes');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to connect to Obsidian instance: $e'),
+            backgroundColor: OpenCodeTheme.error,
+          ),
+        );
+      }
+    }
+  }
+
   void _showEditInstanceDialog(
       BuildContext context, OpenCodeInstance instance) {
     _showInstanceDialog(context, title: 'Edit Instance', instance: instance);
+  }
+
+  void _showEditObsidianInstanceDialog(
+      BuildContext context, ObsidianInstance instance) {
+    _showObsidianInstanceDialog(context, title: 'Edit Obsidian Instance', instance: instance);
   }
 
   void _showInstanceDialog(
@@ -455,14 +189,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.zero,
           side: BorderSide(
-            color: OpenCodeTheme.primary.withOpacity(0.3),
+            color: OpenCodeTheme.primary.withValues(alpha: 0.3),
             width: 1,
           ),
         ),
         content: SizedBox(
-          width: 350,
+          width: 300,
           child: Padding(
-            padding: const EdgeInsets.only(top: 16.0),
+            padding: const EdgeInsets.only(top: 8.0),
             child: Form(
               key: formKey,
               child: Column(
@@ -472,6 +206,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   Container(
                     height: 52,
                     decoration: const BoxDecoration(
+                      color: Colors.transparent,
                       border: Border(
                         left: BorderSide(
                           color: OpenCodeTheme.primary,
@@ -527,11 +262,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
                   // IP and Port Input
                   Container(
                     height: 52,
                     decoration: const BoxDecoration(
+                      color: Colors.transparent,
                       border: Border(
                         left: BorderSide(
                           color: OpenCodeTheme.primary,
@@ -557,7 +293,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                         const SizedBox(width: 12),
                         Flexible(
-                          flex: 10,
+                          flex: 8,
                           child: TextFormField(
                             controller: ipController,
                             style: const TextStyle(
@@ -588,7 +324,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                         ),
                         const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 2.0),
+                          padding: EdgeInsets.symmetric(horizontal: 4.0),
                           child: Text(
                             ':',
                             style: TextStyle(
@@ -600,7 +336,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                         ),
                         Flexible(
-                          flex: 4,
+                          flex: 5,
                           child: TextFormField(
                             controller: portController,
                             style: const TextStyle(
@@ -643,7 +379,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         actions: [
           Padding(
-            padding: const EdgeInsets.all(8.0),
+            padding: const EdgeInsets.fromLTRB(4.0, 0.0, 4.0, 4.0),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -658,7 +394,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       _showDeleteConfirmation(context, instance);
                     },
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
                 ],
                 TerminalButton(
                   command: 'cancel',
@@ -666,7 +402,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   width: double.infinity,
                   onPressed: () => Navigator.of(dialogContext).pop(),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
                 TerminalButton(
                   command: instance == null ? 'add' : 'update',
                   type: TerminalButtonType.primary,
@@ -705,6 +441,511 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  void _showObsidianInstanceDialog(
+    BuildContext context, {
+    required String title,
+    ObsidianInstance? instance,
+  }) {
+    final nameController = TextEditingController(text: instance?.name ?? '');
+    final ipController = TextEditingController(text: instance?.ip ?? '');
+    final portController =
+        TextEditingController(text: instance?.port ?? '27123');
+    final apiKeyController = TextEditingController(text: instance?.apiKey ?? '');
+    final formKey = GlobalKey<FormState>();
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: OpenCodeTheme.background,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.zero,
+          side: BorderSide(
+            color: OpenCodeTheme.primary.withValues(alpha: 0.3),
+            width: 1,
+          ),
+        ),
+        content: SizedBox(
+          width: 300,
+          child: Padding(
+            padding: const EdgeInsets.only(top: 8.0),
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Instance Name Input
+                  Container(
+                    height: 52,
+                    decoration: const BoxDecoration(
+                      color: Colors.transparent,
+                      border: Border(
+                        left: BorderSide(
+                          color: OpenCodeTheme.primary,
+                          width: 2,
+                        ),
+                        right: BorderSide(
+                          color: OpenCodeTheme.primary,
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Row(
+                      children: [
+                        const Text(
+                          '❯',
+                          style: TextStyle(
+                            fontFamily: 'FiraCode',
+                            fontSize: 14,
+                            color: OpenCodeTheme.primary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextFormField(
+                            controller: nameController,
+                            style: const TextStyle(
+                              fontFamily: 'FiraCode',
+                              fontSize: 14,
+                              color: OpenCodeTheme.text,
+                              height: 1.4,
+                            ),
+                            decoration: const InputDecoration(
+                              border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              errorBorder: InputBorder.none,
+                              focusedErrorBorder: InputBorder.none,
+                              disabledBorder: InputBorder.none,
+                              hintText: 'Instance Name',
+                              hintStyle:
+                                  TextStyle(color: OpenCodeTheme.textSecondary),
+                            ),
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return 'Name is required';
+                              }
+                              return null;
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  // IP and Port Input
+                  Container(
+                    height: 52,
+                    decoration: const BoxDecoration(
+                      color: Colors.transparent,
+                      border: Border(
+                        left: BorderSide(
+                          color: OpenCodeTheme.primary,
+                          width: 2,
+                        ),
+                        right: BorderSide(
+                          color: OpenCodeTheme.primary,
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Row(
+                      children: [
+                        const Text(
+                          '❯',
+                          style: TextStyle(
+                            fontFamily: 'FiraCode',
+                            fontSize: 14,
+                            color: OpenCodeTheme.primary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Flexible(
+                          flex: 8,
+                          child: TextFormField(
+                            controller: ipController,
+                            style: const TextStyle(
+                              fontFamily: 'FiraCode',
+                              fontSize: 14,
+                              color: OpenCodeTheme.text,
+                              height: 1.4,
+                            ),
+                            decoration: const InputDecoration(
+                              border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              errorBorder: InputBorder.none,
+                              focusedErrorBorder: InputBorder.none,
+                              disabledBorder: InputBorder.none,
+                              hintText: 'IP Address',
+                              hintStyle:
+                                  TextStyle(color: OpenCodeTheme.textSecondary),
+                            ),
+                            keyboardType: const TextInputType.numberWithOptions(
+                                decimal: true),
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return 'IP address is required';
+                              }
+                              return null;
+                            },
+                          ),
+                        ),
+                        const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 4.0),
+                          child: Text(
+                            ':',
+                            style: TextStyle(
+                              fontFamily: 'FiraCode',
+                              fontSize: 14,
+                              color: OpenCodeTheme.text,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                        Flexible(
+                          flex: 5,
+                          child: TextFormField(
+                            controller: portController,
+                            style: const TextStyle(
+                              fontFamily: 'FiraCode',
+                              fontSize: 14,
+                              color: OpenCodeTheme.text,
+                              height: 1.4,
+                            ),
+                            decoration: const InputDecoration(
+                              border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              errorBorder: InputBorder.none,
+                              focusedErrorBorder: InputBorder.none,
+                              disabledBorder: InputBorder.none,
+                              hintText: 'Port',
+                              hintStyle:
+                                  TextStyle(color: OpenCodeTheme.textSecondary),
+                            ),
+                            keyboardType: TextInputType.number,
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return 'Port is required';
+                              }
+                              final port = int.tryParse(value.trim());
+                              if (port == null || port < 1 || port > 65535) {
+                                return 'Port must be between 1 and 65535';
+                              }
+                              return null;
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  // API Key Input
+                  Container(
+                    height: 52,
+                    decoration: const BoxDecoration(
+                      color: Colors.transparent,
+                      border: Border(
+                        left: BorderSide(
+                          color: OpenCodeTheme.primary,
+                          width: 2,
+                        ),
+                        right: BorderSide(
+                          color: OpenCodeTheme.primary,
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Row(
+                      children: [
+                        const Text(
+                          '❯',
+                          style: TextStyle(
+                            fontFamily: 'FiraCode',
+                            fontSize: 14,
+                            color: OpenCodeTheme.primary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextFormField(
+                            controller: apiKeyController,
+                            style: const TextStyle(
+                              fontFamily: 'FiraCode',
+                              fontSize: 14,
+                              color: OpenCodeTheme.text,
+                              height: 1.4,
+                            ),
+                            decoration: const InputDecoration(
+                              border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              errorBorder: InputBorder.none,
+                              focusedErrorBorder: InputBorder.none,
+                              disabledBorder: InputBorder.none,
+                              hintText: 'API Key',
+                              hintStyle:
+                                  TextStyle(color: OpenCodeTheme.textSecondary),
+                            ),
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return 'API Key is required';
+                              }
+                              return null;
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4.0, 0.0, 4.0, 4.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (instance != null) ...[
+                  TerminalButton(
+                    command: 'delete',
+                    type: TerminalButtonType.danger,
+                    width: double.infinity,
+                    onPressed: () {
+                      Navigator.of(dialogContext).pop();
+                      _showDeleteObsidianConfirmation(context, instance);
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                TerminalButton(
+                  command: 'cancel',
+                  type: TerminalButtonType.neutral,
+                  width: double.infinity,
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                ),
+                const SizedBox(height: 12),
+                TerminalButton(
+                  command: instance == null ? 'add' : 'update',
+                  type: TerminalButtonType.primary,
+                  width: double.infinity,
+                  onPressed: () {
+                    if (formKey.currentState?.validate() ?? false) {
+                      final now = DateTime.now();
+                      final newInstance = ObsidianInstance(
+                        id: instance?.id ?? '',
+                        name: nameController.text.trim(),
+                        ip: ipController.text.trim(),
+                        port: portController.text.trim(),
+                        apiKey: apiKeyController.text.trim(),
+                        createdAt: instance?.createdAt ?? now,
+                        lastUsed: instance?.lastUsed ?? now,
+                      );
+
+                      if (instance == null) {
+                        context
+                            .read<ObsidianInstanceBloc>()
+                            .add(AddObsidianInstance(newInstance));
+                      } else {
+                        context
+                            .read<ObsidianInstanceBloc>()
+                            .add(UpdateObsidianInstance(newInstance));
+                      }
+
+                      Navigator.of(dialogContext).pop();
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOpenCodeInstancesSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'OpenCode Instances (Chat)',
+          style: TextStyle(
+            fontFamily: 'FiraCode',
+            fontSize: 16,
+            color: OpenCodeTheme.text,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 16),
+        BlocBuilder<InstanceBloc, InstanceState>(
+          builder: (context, state) {
+            if (state is InstancesLoading) {
+              return const Center(
+                child: CircularProgressIndicator(
+                  color: OpenCodeTheme.primary,
+                ),
+              );
+            }
+
+            if (state is InstancesLoaded) {
+              return Column(
+                children: [
+                  if (state.instances.isEmpty)
+                    Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: OpenCodeTheme.primary.withValues(alpha: 0.3),
+                          width: 1,
+                        ),
+                      ),
+                      child: Center(
+                        child: Text(
+                          'No OpenCode instances saved',
+                          style: TextStyle(
+                            fontFamily: 'FiraCode',
+                            fontSize: 14,
+                            color: OpenCodeTheme.text.withValues(alpha: 0.6),
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    ...state.instances.map((instance) {
+                      return InstanceListItem(
+                        name: instance.name,
+                        ip: instance.ip,
+                        port: instance.port,
+                        isConnected: _isCurrentlyConnected(instance),
+                        onTap: () => _showEditInstanceDialog(context, instance),
+                        onConnectionTap: () => _connectToInstance(instance),
+                      );
+                    }),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: TerminalButton(
+                      command: 'Add OpenCode Instance',
+                      type: TerminalButtonType.primary,
+                      onPressed: () => _showInstanceDialog(context, title: 'Add OpenCode Instance'),
+                    ),
+                  ),
+                ],
+              );
+            }
+
+            return const SizedBox.shrink();
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildObsidianInstancesSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Obsidian Instances (Notes)',
+          style: TextStyle(
+            fontFamily: 'FiraCode',
+            fontSize: 16,
+            color: OpenCodeTheme.text,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 16),
+        BlocBuilder<ObsidianInstanceBloc, ObsidianInstanceState>(
+          builder: (context, state) {
+            if (state is ObsidianInstancesLoading) {
+              return const Center(
+                child: CircularProgressIndicator(
+                  color: OpenCodeTheme.primary,
+                ),
+              );
+            }
+
+            if (state is ObsidianInstancesLoaded) {
+              return Column(
+                children: [
+                  if (state.instances.isEmpty)
+                    Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: OpenCodeTheme.primary.withValues(alpha: 0.3),
+                          width: 1,
+                        ),
+                      ),
+                      child: Center(
+                        child: Text(
+                          'No Obsidian instances saved',
+                          style: TextStyle(
+                            fontFamily: 'FiraCode',
+                            fontSize: 14,
+                            color: OpenCodeTheme.text.withValues(alpha: 0.6),
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    ...state.instances.map((instance) {
+                      return InstanceListItem(
+                        name: instance.name,
+                        ip: instance.ip,
+                        port: instance.port,
+                        isConnected: _isObsidianCurrentlyConnected(instance),
+                        onTap: () => _showEditObsidianInstanceDialog(context, instance),
+                        onConnectionTap: () => _connectToObsidianInstance(instance),
+                      );
+                    }),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: TerminalButton(
+                      command: 'Add Obsidian Instance',
+                      type: TerminalButtonType.primary,
+                      onPressed: () => _showObsidianInstanceDialog(context, title: 'Add Obsidian Instance'),
+                    ),
+                  ),
+                ],
+              );
+            }
+
+            return const SizedBox.shrink();
+          },
+        ),
+      ],
+    );
+  }
+
+  bool _isCurrentlyConnected(OpenCodeInstance instance) {
+    final configCubit = context.read<ConfigCubit>();
+    final currentState = configCubit.state;
+
+    if (currentState is ConfigLoaded) {
+      return currentState.serverIp == instance.ip &&
+             currentState.port.toString() == instance.port;
+    }
+    return false;
+  }
+
+  bool _isObsidianCurrentlyConnected(ObsidianInstance instance) {
+    final connectionCubit = context.read<ObsidianConnectionCubit>();
+    return connectionCubit.isInstanceActive(instance);
+  }
+
   void _showDeleteConfirmation(
       BuildContext context, OpenCodeInstance instance) {
     showDialog(
@@ -731,6 +972,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onPressed: () {
               Navigator.of(context).pop();
               context.read<InstanceBloc>().add(DeleteInstance(instance.id));
+            },
+            child: const Text(
+              'Delete',
+              style: TextStyle(color: OpenCodeTheme.error),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDeleteObsidianConfirmation(
+      BuildContext context, ObsidianInstance instance) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: OpenCodeTheme.surface,
+        title: const Text(
+          'Delete Obsidian Instance',
+          style: TextStyle(color: OpenCodeTheme.text),
+        ),
+        content: Text(
+          'Are you sure you want to delete "${instance.name}"? This action cannot be undone.',
+          style: const TextStyle(color: OpenCodeTheme.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: OpenCodeTheme.textSecondary),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              context.read<ObsidianInstanceBloc>().add(DeleteObsidianInstance(instance.id));
             },
             child: const Text(
               'Delete',
