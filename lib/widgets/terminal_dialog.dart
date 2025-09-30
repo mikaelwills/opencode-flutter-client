@@ -204,6 +204,18 @@ class _TerminalInputDialogState extends State<TerminalInputDialog> {
   Widget build(BuildContext context) {
     return TerminalDialog(
       title: widget.title,
+      actions: [
+        TerminalDialogAction(
+          label: widget.cancelLabel,
+          type: TerminalButtonType.neutral,
+          onPressed: _handleCancel,
+        ),
+        TerminalDialogAction(
+          label: widget.confirmLabel,
+          type: TerminalButtonType.primary,
+          onPressed: _handleConfirm,
+        ),
+      ],
       children: [
         Form(
           key: _formKey,
@@ -224,18 +236,6 @@ class _TerminalInputDialogState extends State<TerminalInputDialog> {
               ),
             ),
           ),
-        ),
-      ],
-      actions: [
-        TerminalDialogAction(
-          label: widget.cancelLabel,
-          type: TerminalButtonType.neutral,
-          onPressed: _handleCancel,
-        ),
-        TerminalDialogAction(
-          label: widget.confirmLabel,
-          type: TerminalButtonType.primary,
-          onPressed: _handleConfirm,
         ),
       ],
     );

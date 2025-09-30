@@ -2,30 +2,64 @@ import 'dart:convert';
 import 'dart:developer';
 import 'package:dio/dio.dart';
 import '../models/note.dart';
-import '../config/notes_config.dart';
 
 class NotesService {
   final Dio _dio;
-  final String baseUrl;
-  final String apiKey;
+  final String? baseUrl;
+  final String? apiKey;
+  final bool _isConfigured;
 
   NotesService({
     required this.baseUrl,
     required this.apiKey,
     Dio? dio,
-  }) : _dio = dio ?? Dio() {
-    _dio.options.baseUrl = baseUrl;
-    _dio.options.headers['Authorization'] = 'Bearer $apiKey';
-    _dio.options.headers['Content-Type'] = 'application/json';
-    _dio.options.connectTimeout = const Duration(seconds: 10);
-    _dio.options.receiveTimeout = const Duration(seconds: 30);
+  }) : _dio = dio ?? Dio(),
+        _isConfigured = baseUrl != null && baseUrl.isNotEmpty &&
+                       apiKey != null && apiKey.isNotEmpty {
+    if (_isConfigured) {
+      _dio.options.baseUrl = baseUrl!;
+      _dio.options.headers['Authorization'] = 'Bearer $apiKey';
+      _dio.options.headers['Content-Type'] = 'application/json';
+      _dio.options.connectTimeout = const Duration(seconds: 10);
+      _dio.options.receiveTimeout = const Duration(seconds: 30);
+    }
+  }
+
+  /// Create an unconfigured service (no server connection)
+  NotesService.unconfigured()
+      : _dio = Dio(),
+        baseUrl = null,
+        apiKey = null,
+        _isConfigured = false;
+
+  /// Update service configuration when user connects to an Obsidian instance
+  void updateConfiguration(String newBaseUrl, String newApiKey) {
+    if (newBaseUrl.isNotEmpty && newApiKey.isNotEmpty) {
+      _dio.options.baseUrl = newBaseUrl;
+      _dio.options.headers['Authorization'] = 'Bearer $newApiKey';
+      _dio.options.headers['Content-Type'] = 'application/json';
+      _dio.options.connectTimeout = const Duration(seconds: 10);
+      _dio.options.receiveTimeout = const Duration(seconds: 30);
+
+      log('NotesService reconfigured with baseUrl: $newBaseUrl');
+    }
+  }
+
+  /// Clear service configuration when user disconnects
+  void clearConfiguration() {
+    _dio.options.baseUrl = '';
+    _dio.options.headers.remove('Authorization');
+    log('NotesService configuration cleared');
   }
 
   Future<bool> isConfigured() async {
-    return await NotesConfig.isConfigured;
+    return _dio.options.baseUrl.isNotEmpty &&
+           _dio.options.headers['Authorization'] != null;
   }
 
   Future<bool> checkConnection() async {
+    if (!(await isConfigured())) return false;
+
     try {
       final response = await _dio.get('/');
       return response.statusCode == 200;
@@ -35,6 +69,11 @@ class NotesService {
   }
 
   Future<NotesData> getNotesList() async {
+    if (!(await isConfigured())) {
+      log('NotesService not configured - cannot fetch notes list');
+      return const NotesData(folders: [], notes: []);
+    }
+
     try {
       final response = await _dio.get('/vault/');
 
@@ -107,6 +146,11 @@ class NotesService {
   }
 
   Future<Note?> getNote(String path) async {
+    if (!(await isConfigured())) {
+      log('NotesService not configured - cannot fetch note: $path');
+      return null;
+    }
+
     try {
       final encodedPath = Uri.encodeComponent(path);
       final response = await _dio.get('/vault/$encodedPath');
@@ -158,6 +202,11 @@ class NotesService {
   }
 
   Future<bool> createNote(String path, String content) async {
+    if (!(await isConfigured())) {
+      log('NotesService not configured - cannot create note: $path');
+      return false;
+    }
+
     try {
       final encodedPath = Uri.encodeComponent(path);
       final url = '/vault/$encodedPath';

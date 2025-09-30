@@ -52,6 +52,7 @@ class _PromptFieldState extends State<PromptField> {
     return Container(
       key: _promptKey,
       constraints: const BoxConstraints(
+        minHeight: 40,
         maxHeight: 200,
       ),
       margin: widget.margin ?? const EdgeInsets.only(left: 16,top: 16, right: 16),
@@ -110,7 +111,7 @@ class _PromptFieldState extends State<PromptField> {
           disabledBorder: InputBorder.none,
           errorBorder: InputBorder.none,
           focusedErrorBorder: InputBorder.none,
-          contentPadding: EdgeInsets.symmetric(vertical: isCompact ? 8 : 16),
+          contentPadding: EdgeInsets.symmetric(vertical: isCompact ? 8 : 12),
           isDense: false,
           filled: false,
           hintText: 'Type your message...',

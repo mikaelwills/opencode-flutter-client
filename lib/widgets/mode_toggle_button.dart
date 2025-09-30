@@ -26,10 +26,11 @@ class ModeToggleButton extends StatelessWidget {
         },
         tooltip: isInNotes ? 'Switch to Chat' : 'Switch to Notes',
         icon: Icon(
-          isInNotes ? Icons.chat_outlined : Icons.note_outlined,
-          color: OpenCodeTheme.text,
+          isInNotes ? Icons.chat_outlined : Icons.description_outlined,
+          color: OpenCodeTheme.primary,
         ),
       ),
     );
   }
 }
+

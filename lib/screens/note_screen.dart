@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:go_router/go_router.dart';
 import '../theme/opencode_theme.dart';
 import '../blocs/notes_bloc.dart';
+import '../widgets/markdown_styles.dart';
 
 class NoteScreen extends StatefulWidget {
   final String notePath;
@@ -23,6 +25,7 @@ class _NoteScreenState extends State<NoteScreen> {
   bool _hasUnsavedChanges = false;
   String _originalContent = '';
   bool _hasLoadedInitialContent = false;
+  bool _isEditing = false;
 
   @override
   void initState() {
@@ -36,6 +39,7 @@ class _NoteScreenState extends State<NoteScreen> {
       _contentController.text = '# ${_getFileName()}\n\n';
       _originalContent = _contentController.text;
       _hasLoadedInitialContent = true;
+      _isEditing = true; // New notes start in edit mode
     }
   }
 
@@ -60,26 +64,28 @@ class _NoteScreenState extends State<NoteScreen> {
       },
       child: Column(
         children: [
-          _buildHeader(),
-          _buildContent(),
+          Expanded(child: _buildContent()),
+          _buildFooter(),
         ],
       ),
     );
   }
 
-  Widget _buildHeader() {
-    return Row(
+  Widget _buildFooter() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      child: Row(
       children: [
         Semantics(
           label: 'Go back to notes list',
           button: true,
           child: IconButton(
             onPressed: () async {
-              if (await _onWillPop()) {
-                if (context.mounted) {
-                  context.go('/notes');
-                }
-              }
+              final navigator = context;
+              final shouldPop = await _onWillPop();
+              if (!shouldPop) return;
+              if (!navigator.mounted) return;
+              navigator.go('/notes');
             },
             tooltip: 'Back to notes',
             icon: const Icon(
@@ -91,7 +97,7 @@ class _NoteScreenState extends State<NoteScreen> {
         const SizedBox(width: 8),
         Expanded(
           child: Text(
-            _getFileName(),
+            _getFileNameWithExtension(),
             style: const TextStyle(
               fontFamily: 'FiraCode',
               fontSize: 18,
@@ -101,16 +107,19 @@ class _NoteScreenState extends State<NoteScreen> {
             overflow: TextOverflow.ellipsis,
           ),
         ),
-        if (_hasUnsavedChanges) ...[
-          ElevatedButton(
-            onPressed: _saveNote,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: OpenCodeTheme.primary,
-              foregroundColor: OpenCodeTheme.background,
+        if (_isEditing && _hasUnsavedChanges) ...[
+          Semantics(
+            label: 'Save note',
+            button: true,
+            child: IconButton(
+              onPressed: _saveNote,
+              tooltip: 'Save changes',
+              icon: const Icon(
+                Icons.check,
+                color: OpenCodeTheme.success,
+              ),
             ),
-            child: const Text('Save'),
           ),
-          const SizedBox(width: 8),
         ],
         if (!widget.isNewNote)
           Semantics(
@@ -126,6 +135,36 @@ class _NoteScreenState extends State<NoteScreen> {
             ),
           ),
       ],
+      ),
+    );
+  }
+
+  Widget _buildPreview() {
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _isEditing = true;
+        });
+      },
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.only(left: 16, bottom: 16, right: 16),
+        child: _contentController.text.isEmpty
+            ? const Text(
+                'Tap to start writing...',
+                style: TextStyle(
+                  fontFamily: 'FiraCode',
+                  fontSize: 14,
+                  color: OpenCodeTheme.textSecondary,
+                ),
+              )
+            : Markdown(
+                data: _contentController.text,
+                styleSheet: OpenCodeMarkdownStyles.standard,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                padding: EdgeInsets.zero,
+              ),
+      ),
     );
   }
 
@@ -139,7 +178,6 @@ class _NoteScreenState extends State<NoteScreen> {
         height: 1.6,
       ),
       maxLines: null,
-      expands: true,
       textAlignVertical: TextAlignVertical.top,
       decoration: const InputDecoration(
         border: InputBorder.none,
@@ -159,8 +197,7 @@ class _NoteScreenState extends State<NoteScreen> {
   }
 
   Widget _buildContent() {
-    return Expanded(
-      child: BlocListener<NotesBloc, NotesState>(
+    return BlocListener<NotesBloc, NotesState>(
         listener: (context, state) {
           if (state is NoteCreated || state is NoteUpdated) {
             // Update state safely after successful save
@@ -169,6 +206,7 @@ class _NoteScreenState extends State<NoteScreen> {
                 setState(() {
                   _hasUnsavedChanges = false;
                   _originalContent = _contentController.text;
+                  _isEditing = false; // Return to preview mode after save
                   // Ensure we don't reset content after successful save
                   if (!_hasLoadedInitialContent) {
                     _hasLoadedInitialContent = true;
@@ -269,10 +307,9 @@ class _NoteScreenState extends State<NoteScreen> {
               });
             }
 
-            return _buildEditor();
+            return _isEditing ? _buildEditor() : _buildPreview();
           },
         ),
-      ),
     );
   }
 
@@ -409,5 +446,9 @@ class _NoteScreenState extends State<NoteScreen> {
 
   String _getFileName() {
     return widget.notePath.split('/').last.replaceAll('.md', '');
+  }
+
+  String _getFileNameWithExtension() {
+    return widget.notePath.split('/').last;
   }
 }

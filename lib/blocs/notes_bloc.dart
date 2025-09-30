@@ -5,6 +5,8 @@ import 'package:equatable/equatable.dart';
 import 'package:dio/dio.dart';
 import '../services/notes_service.dart';
 import '../models/note.dart';
+import 'obsidian_connection/obsidian_connection_cubit.dart';
+import 'obsidian_connection/obsidian_connection_state.dart';
 
 // Events
 abstract class NotesEvent extends Equatable {
@@ -260,8 +262,33 @@ class NotesConfigurationError extends NotesState {
 // BLoC
 class NotesBloc extends Bloc<NotesEvent, NotesState> {
   final NotesService _service;
+  final ObsidianConnectionCubit _obsidianConnectionCubit;
+  late StreamSubscription _obsidianConnectionSubscription;
 
-  NotesBloc(this._service) : super(NotesInitial()) {
+  NotesBloc(this._service, this._obsidianConnectionCubit) : super(NotesInitial()) {
+    // Load saved connection from SharedPreferences
+    _obsidianConnectionCubit.loadSavedConnection();
+
+    // Check initial connection state and configure service
+    final initialState = _obsidianConnectionCubit.state;
+    if (initialState is ObsidianConnectionLoaded &&
+        initialState.baseUrl.isNotEmpty &&
+        initialState.apiKey != null) {
+      _service.updateConfiguration(initialState.baseUrl, initialState.apiKey!);
+    }
+
+    // Listen to ObsidianConnectionCubit changes and update NotesService configuration
+    _obsidianConnectionSubscription = _obsidianConnectionCubit.stream.listen((connectionState) {
+      if (connectionState is ObsidianConnectionLoaded) {
+        if (connectionState.baseUrl.isNotEmpty && connectionState.apiKey != null) {
+          // Configure notes service with the new connection
+          _service.updateConfiguration(connectionState.baseUrl, connectionState.apiKey!);
+        } else {
+          // Clear configuration if not connected
+          _service.clearConfiguration();
+        }
+      }
+    });
     on<InitializeNotes>(_onInitializeNotes);
     on<CheckConnection>(_onCheckConnection);
     on<LoadNotesList>(_onLoadNotesList);
@@ -506,5 +533,11 @@ class NotesBloc extends Bloc<NotesEvent, NotesState> {
 
       emit(newState);
     }
+  }
+
+  @override
+  Future<void> close() {
+    _obsidianConnectionSubscription.cancel();
+    return super.close();
   }
 }

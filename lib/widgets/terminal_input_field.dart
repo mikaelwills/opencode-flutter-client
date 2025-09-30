@@ -16,8 +16,8 @@ class TerminalInputField extends StatelessWidget {
   final FocusNode? focusNode;
   final TextInputAction? textInputAction;
   final ValueChanged<String>? onSubmitted;
-  final bool compact;
   final double? height;
+  final bool showBorders;
 
   const TerminalInputField({
     super.key,
@@ -33,8 +33,8 @@ class TerminalInputField extends StatelessWidget {
     this.focusNode,
     this.textInputAction,
     this.onSubmitted,
-    this.compact = false,
     this.height,
+    this.showBorders = true,
   });
 
   @override
@@ -43,8 +43,8 @@ class TerminalInputField extends StatelessWidget {
       onTap: () => focusNode?.requestFocus(),
       child: Container(
            height: height ?? 52,
-           decoration: const BoxDecoration(
-          border: Border(
+           decoration: BoxDecoration(
+          border: showBorders ? const Border(
             left: BorderSide(
               color: OpenCodeTheme.primary,
               width: 2,
@@ -53,7 +53,7 @@ class TerminalInputField extends StatelessWidget {
               color: OpenCodeTheme.primary,
               width: 2,
             ),
-          ),
+          ) : null,
         ),
         padding: const EdgeInsets.symmetric(horizontal: 12),
         child: Row(
@@ -68,11 +68,11 @@ class TerminalInputField extends StatelessWidget {
                 ? TextFormField(
                     controller: controller,
                     textAlignVertical: TextAlignVertical.center,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontFamily: 'FiraCode',
                       fontSize: 14,
                       color: OpenCodeTheme.text,
-                      height: compact ? 1.0 : 1.4,
+                      height: 1.4,
                     ),
                     decoration: InputDecoration(
                       border: InputBorder.none,
@@ -101,11 +101,11 @@ class TerminalInputField extends StatelessWidget {
                 : TextField(
                     controller: controller,
                     textAlignVertical: TextAlignVertical.center,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontFamily: 'FiraCode',
                       fontSize: 14,
                       color: OpenCodeTheme.text,
-                      height: compact ? 1.0 : 1.4,
+                      height: 1.4,
                     ),
                     decoration: InputDecoration(
                       border: InputBorder.none,

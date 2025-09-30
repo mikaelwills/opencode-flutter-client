@@ -18,7 +18,6 @@ class ObsidianConnectionCubit extends Cubit<ObsidianConnectionState> {
   Future<void> loadSavedConnection() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final activeInstanceId = prefs.getString(_activeInstanceIdKey);
       final apiKey = prefs.getString(_activeApiKeyKey);
       final baseUrl = prefs.getString(_activeBaseUrlKey) ?? '';
 

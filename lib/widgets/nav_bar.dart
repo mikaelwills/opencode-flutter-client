@@ -46,7 +46,7 @@ class NavBar extends StatelessWidget {
                       color: OpenCodeTheme.text),
                 ),
               ],
-              if (currentLocation.startsWith('/notes')) ...[
+              if (currentLocation == '/notes') ...[
                 GestureDetector(
                   onTap: () => context.go("/chat"),
                   child: const Icon(Icons.arrow_back,

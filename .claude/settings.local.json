@@ -15,7 +15,10 @@
       "mcp__n8n-mcp__list_tasks",
       "mcp__n8n-mcp__get_node_for_task",
       "mcp__n8n-mcp__tools_documentation",
-      "mcp__sequential-thinking__sequentialthinking"
+      "mcp__sequential-thinking__sequentialthinking",
+      "Bash(node:*)",
+      "WebSearch",
+      "WebFetch(domain:raw.githubusercontent.com)"
     ],
     "deny": []
   }

@@ -52,11 +52,6 @@ class SSEService {
                                   _parseFullEvent(event.data!);
             
             if (openCodeEvent != null) {
-              // Only log message.part.updated events content
-              if (openCodeEvent.type == 'message.part.updated') {
-                final text = openCodeEvent.data?['properties']?['part']?['text'] ?? '';
-              }
-              
               if (_eventController?.isClosed == false) {
                 _eventController!.add(openCodeEvent);
               }

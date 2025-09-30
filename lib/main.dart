@@ -18,7 +18,6 @@ import 'blocs/obsidian_instance/obsidian_instance_bloc.dart';
 import 'blocs/obsidian_connection/obsidian_connection_cubit.dart';
 import 'blocs/notes_bloc.dart';
 import 'services/notes_service.dart';
-import 'config/notes_config.dart';
 import 'router/app_router.dart';
 import 'config/opencode_config.dart';
 
@@ -32,14 +31,8 @@ void main() async {
   // Set the cubit for backward compatibility
   OpenCodeConfig.setConfigCubit(configCubit);
 
-  await NotesConfig.initializeWithDefaults();
-
-  final notesBaseUrl = await NotesConfig.baseUrl;
-  final notesApiKey = await NotesConfig.apiKey;
-  final notesService = NotesService(
-    baseUrl: notesBaseUrl,
-    apiKey: notesApiKey ?? 'd8c56f738e76182b8963ff34ca9dd4c4a76b40e00da2371cda90a26a551c4b8b',
-  );
+  // Create unconfigured NotesService initially - it will be updated when user connects to an Obsidian instance
+  final notesService = NotesService.unconfigured();
 
   final openCodeClient = OpenCodeClient();
 
@@ -134,7 +127,8 @@ class OpenCodeApp extends StatelessWidget {
           ),
           BlocProvider<NotesBloc>(
             create: (context) {
-              final notesBloc = NotesBloc(notesService);
+              final obsidianConnectionCubit = context.read<ObsidianConnectionCubit>();
+              final notesBloc = NotesBloc(notesService, obsidianConnectionCubit);
               notesBloc.add(InitializeNotes());
               return notesBloc;
             },

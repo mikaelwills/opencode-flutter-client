@@ -31,12 +31,11 @@ class NetworkService {
 
   void _updateNetworkStatus(List<ConnectivityResult> connectivityResults) {
     final NetworkStatus newStatus = _determineNetworkStatus(connectivityResults);
-    
+
     // Only emit if status actually changed
     if (_currentStatus != newStatus) {
-      final previousStatus = _currentStatus;
       _currentStatus = newStatus;
-      
+
       _networkController.add(newStatus);
     }
   }

@@ -54,16 +54,16 @@ class _NotesListScreenState extends State<NotesListScreen> {
               onPressed: _showCreateNoteDialog,
               tooltip: 'Create new note',
               icon: const Icon(
+                size: 30,
                 Icons.add,
                 color: OpenCodeTheme.primary,
               ),
             ),
           ),
-          const SizedBox(width: 8),
           Expanded(
             child: NotesSearchBar(
               controller: _searchController,
-              height: 30,
+              height: 40,
               onChanged: _onSearchChanged,
             ),
           ),
@@ -144,7 +144,7 @@ class _NotesListScreenState extends State<NotesListScreen> {
     final notesToShow = _filterNotes(state.notesData.notes, _searchQuery);
 
     // Handle empty search results
-    if (_searchQuery.trim().length >= 1 && notesToShow.isEmpty) {
+    if (_searchQuery.trim().isNotEmpty && notesToShow.isEmpty) {
       return _buildNoSearchResultsState(_searchQuery);
     }
 
@@ -154,7 +154,7 @@ class _NotesListScreenState extends State<NotesListScreen> {
     }
 
     // Show filtered flat list during search, normal hierarchy otherwise
-    if (_searchQuery.trim().length >= 1) {
+    if (_searchQuery.trim().isNotEmpty) {
       return ListView.builder(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         itemCount: notesToShow.length,
@@ -230,7 +230,6 @@ class _NotesListScreenState extends State<NotesListScreen> {
       ),
     );
   }
-
 
   Widget _buildNoSearchResultsState(String query) {
     return Center(
@@ -309,18 +308,16 @@ class _NotesListScreenState extends State<NotesListScreen> {
   }
 
   List<Note> _getRootNotes(NotesListLoaded state) {
-    return state.notesData.notes
-        .where((note) => note.depth == 0)
-        .toList();
+    return state.notesData.notes.where((note) => note.depth == 0).toList();
   }
 
   List<Note> _filterNotes(List<Note> notes, String query) {
-    if (query.trim().length < 1) return notes;
+    if (query.trim().isEmpty) return notes;
 
     final queryLower = query.toLowerCase();
     return notes.where((note) {
       return note.name.toLowerCase().contains(queryLower) ||
-             note.path.toLowerCase().contains(queryLower);
+          note.path.toLowerCase().contains(queryLower);
     }).toList();
   }
 

@@ -18,9 +18,6 @@ class MessagePartWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final content = part.content;
-    final contentPreview = content != null ? (content.length > 50 ? '${content.substring(0, 50)}...' : content) : 'null';
-    
     switch (part.type) {
       case 'text':
         return _buildTextPart();

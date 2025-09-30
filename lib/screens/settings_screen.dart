@@ -15,7 +15,6 @@ import '../blocs/obsidian_instance/obsidian_instance_bloc.dart';
 import '../blocs/obsidian_instance/obsidian_instance_event.dart';
 import '../blocs/obsidian_instance/obsidian_instance_state.dart';
 import '../blocs/obsidian_connection/obsidian_connection_cubit.dart';
-import '../blocs/obsidian_connection/obsidian_connection_state.dart' as obsidian_connection_states;
 import '../models/opencode_instance.dart';
 import '../models/obsidian_instance.dart';
 import '../services/sse_service.dart';

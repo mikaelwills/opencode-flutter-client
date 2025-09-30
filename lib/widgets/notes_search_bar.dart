@@ -29,26 +29,17 @@ class NotesSearchBar extends StatefulWidget {
 
 class _NotesSearchBarState extends State<NotesSearchBar> {
   late FocusNode _focusNode;
-  bool _hasFocus = false;
 
   @override
   void initState() {
     super.initState();
     _focusNode = FocusNode();
-    _focusNode.addListener(_onFocusChanged);
   }
 
   @override
   void dispose() {
-    _focusNode.removeListener(_onFocusChanged);
     _focusNode.dispose();
     super.dispose();
-  }
-
-  void _onFocusChanged() {
-    setState(() {
-      _hasFocus = _focusNode.hasFocus;
-    });
   }
 
   void _handleClear() {
@@ -57,25 +48,6 @@ class _NotesSearchBarState extends State<NotesSearchBar> {
     widget.onClear?.call();
     // Provide haptic feedback
     HapticFeedback.lightImpact();
-  }
-
-  Widget _buildSearchIcon() {
-    if (widget.isLoading) {
-      return const SizedBox(
-        width: 18,
-        height: 18,
-        child: CircularProgressIndicator(
-          strokeWidth: 2,
-          valueColor: AlwaysStoppedAnimation<Color>(OpenCodeTheme.primary),
-        ),
-      );
-    }
-
-    return Icon(
-      Icons.search,
-      color: _hasFocus ? OpenCodeTheme.primary : OpenCodeTheme.textSecondary,
-      size: 18,
-    );
   }
 
   Widget? _buildSuffixIcon() {
@@ -100,14 +72,13 @@ class _NotesSearchBarState extends State<NotesSearchBar> {
       children: [
         TerminalInputField(
           controller: widget.controller,
-          hintText: 'Search notes...',
+          hintText: ' Search notes...',
           onChanged: widget.onChanged,
           focusNode: _focusNode,
           textInputAction: TextInputAction.search,
-          prefixIcon: _buildSearchIcon(),
           suffixIcon: _buildSuffixIcon(),
-          compact: true,
           height: widget.height,
+          showBorders: false,
         ),
         if (widget.errorText != null) ...[
           const SizedBox(height: 4),
